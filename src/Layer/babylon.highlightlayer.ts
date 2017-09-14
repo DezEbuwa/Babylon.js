@@ -9,6 +9,7 @@ module BABYLON {
     class GlowBlurPostProcess extends PostProcess {
         constructor(name: string, public direction: Vector2, public kernel: number, options: number | PostProcessOptions, camera: Camera, samplingMode: number = Texture.BILINEAR_SAMPLINGMODE, engine?: Engine, reusable?: boolean) {
             super(name, "glowBlurPostProcess", ["screenSize", "direction", "blurWidth"], null, options, camera, samplingMode, engine, reusable);
+
             this.onApplyObservable.add((effect: Effect) => {
                 effect.setFloat2("screenSize", this.width, this.height);
                 effect.setVector2("direction", this.direction);
@@ -262,14 +263,14 @@ module BABYLON {
 
             // Adapt options
             this._options = options || {
-                mainTextureRatio: 0.25,
+                mainTextureRatio: 0.5,
                 blurTextureSizeRatio: 0.5,
-                blurHorizontalSize: 1,
-                blurVerticalSize: 1,
+                blurHorizontalSize: 1.0,
+                blurVerticalSize: 1.0,
                 alphaBlendingMode: Engine.ALPHA_COMBINE
             };
-            this._options.mainTextureRatio = this._options.mainTextureRatio || 0.25;
-            this._options.blurTextureSizeRatio = this._options.blurTextureSizeRatio || 0.5;
+            this._options.mainTextureRatio = this._options.mainTextureRatio || 0.5;
+            this._options.blurTextureSizeRatio = this._options.blurTextureSizeRatio || 1.0;
             this._options.blurHorizontalSize = this._options.blurHorizontalSize || 1;
             this._options.blurVerticalSize = this._options.blurVerticalSize || 1;
             this._options.alphaBlendingMode = this._options.alphaBlendingMode || Engine.ALPHA_COMBINE;
@@ -284,16 +285,7 @@ module BABYLON {
             var vertexBuffer = new VertexBuffer(engine, vertices, VertexBuffer.PositionKind, false, false, 2);
             this._vertexBuffers[VertexBuffer.PositionKind] = vertexBuffer;
 
-            // Indices
-            var indices = [];
-            indices.push(0);
-            indices.push(1);
-            indices.push(2);
-            indices.push(0);
-            indices.push(2);
-            indices.push(3);
-
-            this._indexBuffer = engine.createIndexBuffer(indices);
+            this._createIndexBuffer();
 
             // Effect
             this._glowMapMergeEffect = engine.createEffect("glowMapMerge",
@@ -307,6 +299,28 @@ module BABYLON {
             // Create Textures and post processes
             this.createTextureAndPostProcesses();
         }
+       
+        private _createIndexBuffer(): void {
+            var engine = this._scene.getEngine();
+
+            // Indices
+            var indices = [];
+            indices.push(0);
+            indices.push(1);
+            indices.push(2);
+
+            indices.push(0);
+            indices.push(2);
+            indices.push(3);
+
+            this._indexBuffer = engine.createIndexBuffer(indices);
+        }
+
+        public _rebuild(): void {
+            this._vertexBuffers[VertexBuffer.PositionKind]._rebuild();
+
+            this._createIndexBuffer();
+        }        
 
         /**
          * Creates the render target textures and post processes used in the highlight layer.
@@ -333,6 +347,7 @@ module BABYLON {
             this._mainTexture.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
             this._mainTexture.renderParticles = false;
             this._mainTexture.renderList = null;
+            this._mainTexture.ignoreCameraViewport = true;
 
             this._blurTexture = new RenderTargetTexture("HighlightLayerBlurRTT",
                 {
@@ -348,6 +363,7 @@ module BABYLON {
             this._blurTexture.anisotropicFilteringLevel = 16;
             this._blurTexture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
             this._blurTexture.renderParticles = false;
+            this._blurTexture.ignoreCameraViewport = true;
 
             this._downSamplePostprocess = new PassPostProcess("HighlightLayerPPP", this._options.blurTextureSizeRatio,
                 null, Texture.BILINEAR_SAMPLINGMODE, this._scene.getEngine());
@@ -370,7 +386,7 @@ module BABYLON {
             }
             else {
                 this._horizontalBlurPostprocess = new BlurPostProcess("HighlightLayerHBP", new BABYLON.Vector2(1.0, 0), this._options.blurHorizontalSize, 1,
-                null, Texture.BILINEAR_SAMPLINGMODE, this._scene.getEngine());
+                    null, Texture.BILINEAR_SAMPLINGMODE, this._scene.getEngine());
                 this._horizontalBlurPostprocess.onApplyObservable.add(effect => {
                     effect.setFloat2("screenSize", blurTextureWidth, blurTextureHeight);
                 });
@@ -387,7 +403,7 @@ module BABYLON {
 
                 this._scene.postProcessManager.directRender(
                     [this._downSamplePostprocess, this._horizontalBlurPostprocess, this._verticalBlurPostprocess],
-                    this._blurTexture.getInternalTexture());
+                    this._blurTexture.getInternalTexture(), true);
 
                 this.onAfterBlurObservable.notifyObservers(this);
             });
@@ -444,8 +460,10 @@ module BABYLON {
                     // Alpha test
                     if (material && material.needAlphaTesting()) {
                         var alphaTexture = material.getAlphaTestTexture();
-                        this._glowMapGenerationEffect.setTexture("diffuseSampler", alphaTexture);
-                        this._glowMapGenerationEffect.setMatrix("diffuseMatrix", alphaTexture.getTextureMatrix());
+                        if (alphaTexture) {
+                            this._glowMapGenerationEffect.setTexture("diffuseSampler", alphaTexture);
+                            this._glowMapGenerationEffect.setMatrix("diffuseMatrix", alphaTexture.getTextureMatrix());
+                        }
                     }
 
                     // Glow emissive only
@@ -468,10 +486,20 @@ module BABYLON {
                 }
             };
 
-            this._mainTexture.customRenderFunction = (opaqueSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>): void => {
+            this._mainTexture.customRenderFunction = (opaqueSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, depthOnlySubMeshes: SmartArray<SubMesh>): void => {
                 this.onBeforeRenderMainTextureObservable.notifyObservers(this);
 
                 var index: number;
+
+                let engine = this._scene.getEngine();
+                
+                if (depthOnlySubMeshes.length) {
+                    engine.setColorWrite(false);            
+                    for (index = 0; index < depthOnlySubMeshes.length; index++) {
+                        renderSubMesh(depthOnlySubMeshes.data[index]);
+                    }
+                    engine.setColorWrite(true);
+                }                
 
                 for (index = 0; index < opaqueSubMeshes.length; index++) {
                     renderSubMesh(opaqueSubMeshes.data[index]);
@@ -612,7 +640,7 @@ module BABYLON {
             var previousStencilMask = engine.getStencilMask();
             var previousStencilOperationPass = engine.getStencilOperationPass();
             var previousStencilOperationFail = engine.getStencilOperationFail();
-            var previousStencilOperationDepthFail = engine.getStencilOperationDepthFail();            
+            var previousStencilOperationDepthFail = engine.getStencilOperationDepthFail();
             var previousAlphaMode = engine.getAlphaMode();
 
             // Texture
@@ -650,7 +678,7 @@ module BABYLON {
             engine.setStencilBuffer(previousStencilBuffer);
             engine.setStencilOperationPass(previousStencilOperationPass);
             engine.setStencilOperationFail(previousStencilOperationFail);
-            engine.setStencilOperationDepthFail(previousStencilOperationDepthFail);            
+            engine.setStencilOperationDepthFail(previousStencilOperationDepthFail);
 
             (<any>engine)._stencilState.reset();
 
@@ -771,8 +799,8 @@ module BABYLON {
                 this._mainTextureDesiredSize.height = this._options.mainTextureFixedSize;
             }
             else {
-                this._mainTextureDesiredSize.width = this._engine.getRenderingCanvas().width * this._options.mainTextureRatio;
-                this._mainTextureDesiredSize.height = this._engine.getRenderingCanvas().height * this._options.mainTextureRatio;
+                this._mainTextureDesiredSize.width = this._engine.getRenderWidth() * this._options.mainTextureRatio;
+                this._mainTextureDesiredSize.height = this._engine.getRenderHeight() * this._options.mainTextureRatio;
 
                 this._mainTextureDesiredSize.width = this._engine.needPOTTextures ? Tools.GetExponentOfTwo(this._mainTextureDesiredSize.width, this._maxSize) : this._mainTextureDesiredSize.width;
                 this._mainTextureDesiredSize.height = this._engine.needPOTTextures ? Tools.GetExponentOfTwo(this._mainTextureDesiredSize.height, this._maxSize) : this._mainTextureDesiredSize.height;

@@ -3,16 +3,13 @@
 namespace BabylonExport.Entities
 {
     [DataContract]
-    public class BabylonCamera : BabylonIAnimatable
+    public class BabylonCamera : BabylonNode
     {
-        [DataMember]
-        public string name { get; set; }
-
-        [DataMember]
-        public string id { get; set; }
-
-        [DataMember]
-        public string parentId { get; set; }
+        public enum CameraMode
+        {
+            PERSPECTIVE_CAMERA = 0,
+            ORTHOGRAPHIC_CAMERA = 1
+        }
 
         [DataMember]
         public string lockedTargetId { get; set; }
@@ -25,6 +22,9 @@ namespace BabylonExport.Entities
 
         [DataMember]
         public float[] rotation { get; set; }
+
+        [DataMember]
+        public float[] rotationQuaternion { get; set; }
 
         [DataMember]
         public float[] target { get; set; }
@@ -57,22 +57,7 @@ namespace BabylonExport.Entities
         public float[] ellipsoid { get; set; }
 
         [DataMember]
-        public bool autoAnimate { get; set; }
-
-        [DataMember]
-        public int autoAnimateFrom { get; set; }
-
-        [DataMember]
-        public int autoAnimateTo { get; set; }
-
-        [DataMember]
-        public bool autoAnimateLoop { get; set; }
-
-        [DataMember]
-        public BabylonAnimation[] animations { get; set; }
-
-        [DataMember]
-        public int mode { get; set; }
+        public CameraMode mode { get; set; }
 
         [DataMember]
         public float? orthoLeft { get; set; }
@@ -108,7 +93,7 @@ namespace BabylonExport.Entities
             inertia = 0.9f;
             interaxialDistance = 0.0637f;
 
-            mode = 0;
+            mode = CameraMode.PERSPECTIVE_CAMERA;
             orthoLeft = null;
             orthoRight = null;
             orthoBottom = null;

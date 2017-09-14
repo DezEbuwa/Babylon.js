@@ -245,9 +245,9 @@ module BABYLON.GLTF2 {
         sampler?: number;
         source: number;
 
-        // Runtime values (one per coordinate index)
-        babylonTextures?: Texture[];
-        blobURL?: string;
+        // Runtime values
+        url?: string;
+        dataReadyObservable?: Observable<IGLTFTexture>;
     }
 
     export interface IGLTFTextureInfo {
@@ -264,7 +264,6 @@ module BABYLON.GLTF2 {
         cameras?: IGLTFCamera[];
         extensionsUsed?: string[];
         extensionsRequired?: string[];
-        glExtensionsUsed?: string[];
         images?: IGLTFImage[];
         materials?: IGLTFMaterial[];
         meshes?: IGLTFMesh[];

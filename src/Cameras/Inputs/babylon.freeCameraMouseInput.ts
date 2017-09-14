@@ -15,7 +15,7 @@ module BABYLON {
         private previousPosition: { x: number, y: number };
 
         constructor(public touchEnabled = true) {
-        }
+        }           
 
         attachControl(element: HTMLElement, noPreventDefault?: boolean) {
             var engine = this.camera.getEngine();
@@ -23,6 +23,10 @@ module BABYLON {
             if (!this._pointerInput) {
                 this._pointerInput = (p, s) => {
                     var evt = <PointerEvent>p.event;
+
+                    if (engine.isInVRExclusivePointerMode) {
+                        return;
+                    }
 
                     if (!this.touchEnabled && evt.pointerType === "touch") {
                         return;
@@ -95,6 +99,10 @@ module BABYLON {
                     return;
                 }
 
+                if (engine.isInVRExclusivePointerMode) {
+                    return;
+                }
+
                 var offsetX = evt.movementX || evt.mozMovementX || evt.webkitMovementX || evt.msMovementX || 0;
                 var offsetY = evt.movementY || evt.mozMovementY || evt.webkitMovementY || evt.msMovementY || 0;
 
@@ -129,13 +137,13 @@ module BABYLON {
             }
         }
 
-        getTypeName(): string {
+        getClassName(): string {
             return "FreeCameraMouseInput";
         }
 
         getSimpleName() {
             return "mouse";
-        }
+        }      
     }
 
     CameraInputTypes["FreeCameraMouseInput"] = FreeCameraMouseInput;

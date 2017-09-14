@@ -70,19 +70,11 @@
         var zipCode;
         BABYLON.Engine.ShadersRepository = "/src/Shaders/";
 
-        var currentVersionElement = document.getElementById("currentVersion1600");
-
-        if (currentVersionElement) {
-            switch (BABYLON.Engine.Version) {
-                case "2.5":
-                    setToMultipleID("currentVersion", "innerHTML", "Version: " + BABYLON.Engine.Version);
-                    break;
-                default:
-                    setToMultipleID("currentVersion", "innerHTML", "Version: Latest");
-                    break;
-            }
+        if (location.href.indexOf("Stable") !== -1) {
+            setToMultipleID("currentVersion", "innerHTML", "Version: Stable");
+        } else {
+            setToMultipleID("currentVersion", "innerHTML", "Version: Latest");
         }
-
 
         var loadScript = function (scriptURL, title) {
             var xhr = new XMLHttpRequest();
@@ -191,6 +183,9 @@
         }
 
         var createNewScript = function () {
+            // check if checked is on
+            let iCanClear = checkSafeMode("Are you sure you want to create a new playground?");
+            if (!iCanClear) return;
             location.hash = "";
             currentSnippetToken = null;
             currentSnippetTitle = null;
@@ -204,11 +199,29 @@
         }
 
         var clear = function () {
+            // check if checked is on
+            let iCanClear = checkSafeMode("Are you sure you want to clear the playground?");
+            if (!iCanClear) return;
             location.hash = "";
             currentSnippetToken = null;
             jsEditor.setValue('');
             jsEditor.setPosition({ lineNumber: 0, column: 0 });
             jsEditor.focus();
+        }
+
+        var checkSafeMode = function (message) {
+            var safeToggle = document.getElementById("safemodeToggle1600");
+            if (safeToggle.classList.contains('checked')) {
+                let confirm = window.confirm(message);
+                if (!confirm) {
+                    return false;
+                } else {
+                    document.getElementById("safemodeToggle1600").classList.toggle('checked');
+                    return true;
+                }
+            } else {
+                return true;
+            }
         }
 
         var showError = function (errorMessage, errorEvent) {
@@ -295,14 +308,14 @@
                 var showDebugLayer = false;
                 var initialTabIndex = 0;
 
-                if(document.getElementsByClassName('insp-wrapper').length > 0){                  
-                    for(var i = 0; i < engine.scenes.length; i++){
-                        if(engine.scenes[i]._debugLayer){
+                if (document.getElementsByClassName('insp-wrapper').length > 0) {
+                    for (var i = 0; i < engine.scenes.length; i++) {
+                        if (engine.scenes[i]._debugLayer) {
                             //TODO: once inspector is updated on netlify, use getActiveTabIndex instead of the following loop
                             //initialTabIndex = engine.scenes[i]._debugLayer._inspector.getActiveTabIndex();
                             var tabs = engine.scenes[i]._debugLayer._inspector._tabbar._tabs;
-                            for(var j = 0; j < tabs.length; j++){
-                                if(tabs[j].isActive()){
+                            for (var j = 0; j < tabs.length; j++) {
+                                if (tabs[j].isActive()) {
                                     initialTabIndex = j;
                                     break;
                                 }
@@ -311,7 +324,7 @@
                         }
                     }
                     showInspector = true;
-                }else if(document.getElementById('DebugLayer')){
+                } else if (document.getElementById('DebugLayer')) {
                     showDebugLayer = true;
                 }
 
@@ -396,13 +409,13 @@
                     document.getElementById("statusBar").innerHTML = "";
                 });
 
-                if(scene){
-                    if(showInspector){
-                        scene.debugLayer.show({initialTab:initialTabIndex});
-                        scene.executeWhenReady(function(){
+                if (scene) {
+                    if (showInspector) {
+                        scene.debugLayer.show({ initialTab: initialTabIndex });
+                        scene.executeWhenReady(function () {
                             scene.debugLayer._inspector.refresh();
                         })
-                    }else if(showDebugLayer){
+                    } else if (showDebugLayer) {
                         scene.debugLayer.show();
                     }
                 }
@@ -466,13 +479,13 @@
                 return;
             }
 
-            if (textures[index].isRenderTarget || textures[index] instanceof BABYLON.DynamicTexture) {
+            if (textures[index].isRenderTarget || textures[index] instanceof BABYLON.DynamicTexture || textures[index].name.indexOf("data:") !== -1) {
                 addTexturesToZip(zip, index + 1, textures, folder, then);
                 return;
             }
 
             if (textures[index].isCube) {
-                if (textures[index]._extensions) {
+                if (textures[index]._extensions && textures[index].name.indexOf("dds") === -1) {
                     for (var i = 0; i < 6; i++) {
                         textures.push({ name: textures[index].name + textures[index]._extensions[i] });
                     }
@@ -494,10 +507,10 @@
                 url = textures[index].video.currentSrc;
             } else {
                 // url = textures[index].name;
-                url = textures[index].url;
+                url = textures[index].url ? textures[index].url : textures[index].name;
             }
 
-            var name = textures[index].name;
+            var name = textures[index].name.replace("textures/", "");
             // var name = url.substr(url.lastIndexOf("/") + 1);
 
             if (url != null) {
@@ -584,8 +597,8 @@
         // Versions
         setVersion = function (version) {
             switch (version) {
-                case "2.5":
-                    location.href = "index2_5.html" + location.hash;
+                case "stable":
+                    location.href = "indexStable.html" + location.hash;
                     break;
                 default:
                     location.href = "index.html" + location.hash;
@@ -602,7 +615,7 @@
 
         // Fullscreen
         document.getElementById("renderCanvas").addEventListener("webkitfullscreenchange", function () {
-            if(document.webkitIsFullScreen) goFullPage();
+            if (document.webkitIsFullScreen) goFullPage();
             else exitFullPage();
         }, false);
 
@@ -625,11 +638,11 @@
         var editorGoFullscreen = function () {
             var editorDiv = document.getElementById("jsEditor");
             if (editorDiv.requestFullscreen) {
-            editorDiv.requestFullscreen();
+                editorDiv.requestFullscreen();
             } else if (editorDiv.mozRequestFullScreen) {
-            editorDiv.mozRequestFullScreen();
+                editorDiv.mozRequestFullScreen();
             } else if (editorDiv.webkitRequestFullscreen) {
-            editorDiv.webkitRequestFullscreen();
+                editorDiv.webkitRequestFullscreen();
             }
 
         }
@@ -973,7 +986,8 @@
                         automaticLayout: true,
                         readOnly: false,
                         theme: "vs",
-                        contextmenu: false
+                        contextmenu: false,
+                        folding: true
                     });
 
                     run();

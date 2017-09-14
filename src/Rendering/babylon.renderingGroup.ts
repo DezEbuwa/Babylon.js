@@ -4,7 +4,8 @@
         private _opaqueSubMeshes = new SmartArray<SubMesh>(256);
         private _transparentSubMeshes = new SmartArray<SubMesh>(256);
         private _alphaTestSubMeshes = new SmartArray<SubMesh>(256);
-        private _particleSystems = new SmartArray<ParticleSystem>(256);
+        private _depthOnlySubMeshes = new SmartArray<SubMesh>(256);
+        private _particleSystems = new SmartArray<IParticleSystem>(256);
         private _spriteManagers = new SmartArray<SpriteManager>(256);        
         private _activeVertices: number;
 
@@ -85,13 +86,22 @@
          * @param customRenderFunction Used to override the default render behaviour of the group.
          * @returns true if rendered some submeshes.
          */
-        public render(customRenderFunction: (opaqueSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>) => void, renderSprites: boolean, renderParticles: boolean, activeMeshes: AbstractMesh[]): void {
+        public render(customRenderFunction: (opaqueSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, depthOnlySubMeshes: SmartArray<SubMesh>) => void, renderSprites: boolean, renderParticles: boolean, activeMeshes: AbstractMesh[]): void {
             if (customRenderFunction) {
-                customRenderFunction(this._opaqueSubMeshes, this._alphaTestSubMeshes, this._transparentSubMeshes);
+                customRenderFunction(this._opaqueSubMeshes, this._alphaTestSubMeshes, this._transparentSubMeshes, this._depthOnlySubMeshes);
                 return;
             }
 
             var engine = this._scene.getEngine();
+
+            // Depth only
+            if (this._depthOnlySubMeshes.length !== 0) {
+                engine.setAlphaTesting(true);
+                engine.setColorWrite(false);
+                this._renderAlphaTest(this._depthOnlySubMeshes);
+                engine.setAlphaTesting(false);
+                engine.setColorWrite(true);
+            }            
             
             // Opaque
             if (this._opaqueSubMeshes.length !== 0) {
@@ -107,6 +117,7 @@
 
             var stencilState = engine.getStencilBuffer();
             engine.setStencilBuffer(false);
+
             // Sprites
             if (renderSprites) {
                 this._renderSprites();
@@ -126,12 +137,17 @@
                 this._renderTransparent(this._transparentSubMeshes);
                 engine.setAlphaMode(Engine.ALPHA_DISABLE);
             }
-            engine.setStencilBuffer(stencilState);
+
+            // Set back stencil to false in case it changes before the edge renderer.
+            engine.setStencilBuffer(false);
 
             // Edges
             for (var edgesRendererIndex = 0; edgesRendererIndex < this._edgesRenderers.length; edgesRendererIndex++) {
                 this._edgesRenderers.data[edgesRendererIndex].render();
             }
+
+            // Restore Stencil state.
+            engine.setStencilBuffer(stencilState);
         }
 
         /**
@@ -167,7 +183,7 @@
          */
         private static renderSorted(subMeshes: SmartArray<SubMesh>, sortCompareFn: (a: SubMesh, b: SubMesh) => number, cameraPosition: Vector3, transparent: boolean): void {
             let subIndex = 0;
-            let subMesh;
+            let subMesh: SubMesh;
             for (; subIndex < subMeshes.length; subIndex++) {
                 subMesh = subMeshes.data[subIndex];
                 subMesh._alphaIndex = subMesh.getMesh().alphaIndex;
@@ -179,6 +195,21 @@
 
             for (subIndex = 0; subIndex < sortedArray.length; subIndex++) {
                 subMesh = sortedArray[subIndex];
+
+                if (transparent) {
+                    let material = subMesh.getMaterial();
+
+                    if (material.needDepthPrePass) {
+                        let engine = material.getScene().getEngine();
+                        engine.setColorWrite(false);
+                        engine.setAlphaTesting(true);
+                        engine.setAlphaMode(Engine.ALPHA_DISABLE);
+                        subMesh.render(false);
+                        engine.setAlphaTesting(false);
+                        engine.setColorWrite(true);
+                    }
+                }
+
                 subMesh.render(transparent);
             }
         }
@@ -262,6 +293,7 @@
             this._opaqueSubMeshes.reset();
             this._transparentSubMeshes.reset();
             this._alphaTestSubMeshes.reset();
+            this._depthOnlySubMeshes.reset();
             this._particleSystems.reset();
             this._spriteManagers.reset();            
             this._edgesRenderers.reset();
@@ -271,6 +303,7 @@
             this._opaqueSubMeshes.dispose();
             this._transparentSubMeshes.dispose();
             this._alphaTestSubMeshes.dispose();
+            this._depthOnlySubMeshes.dispose();
             this._particleSystems.dispose();
             this._spriteManagers.dispose();                      
             this._edgesRenderers.dispose();
@@ -287,8 +320,16 @@
             if (material.needAlphaBlending() || mesh.visibility < 1.0 || mesh.hasVertexAlpha) { // Transparent
                 this._transparentSubMeshes.push(subMesh);
             } else if (material.needAlphaTesting()) { // Alpha test
+                if (material.needDepthPrePass) {
+                    this._depthOnlySubMeshes.push(subMesh);
+                }
+                
                 this._alphaTestSubMeshes.push(subMesh);
             } else {
+                if (material.needDepthPrePass) {
+                    this._depthOnlySubMeshes.push(subMesh);
+                }
+                
                 this._opaqueSubMeshes.push(subMesh); // Opaque
             }
 
@@ -301,7 +342,7 @@
             this._spriteManagers.push(spriteManager);
         }
 
-        public dispatchParticles(particleSystem: ParticleSystem) {
+        public dispatchParticles(particleSystem: IParticleSystem) {
             this._particleSystems.push(particleSystem);
         }
 
@@ -319,7 +360,9 @@
                 if ((activeCamera.layerMask & particleSystem.layerMask) === 0) {
                     continue;
                 }
-                if (!particleSystem.emitter.position || !activeMeshes || activeMeshes.indexOf(particleSystem.emitter) !== -1) {
+
+                let emitter: any = particleSystem.emitter;
+                if (!emitter.position || !activeMeshes || activeMeshes.indexOf(emitter) !== -1) {
                     this._scene._activeParticles.addCount(particleSystem.render(), false);
                 }
             }

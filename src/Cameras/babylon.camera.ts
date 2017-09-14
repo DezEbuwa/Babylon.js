@@ -63,6 +63,8 @@
 
         public static ForceAttachControlToAlwaysPreventDefault = false;
 
+        public static UseAlternateWebVRRendering = false;
+
         // Members
         @serializeAsVector3()
         public position: Vector3;
@@ -86,7 +88,7 @@
         public fov = 0.8;
 
         @serialize()
-        public minZ = 1.0;
+        public minZ = 1;
 
         @serialize()
         public maxZ = 10000.0;
@@ -120,8 +122,16 @@
         public _rigCameras = new Array<Camera>();
         public _rigPostProcess: PostProcess;
         protected _webvrViewMatrix = Matrix.Identity();
+        public _skipRendering = false;
+        public _alternateCamera: Camera;
 
-        public customRenderTargets = new Array<RenderTargetTexture>();        
+        public customRenderTargets = new Array<RenderTargetTexture>();    
+        
+        // Observables
+        public onViewMatrixChangedObservable = new Observable<Camera>();
+        public onProjectionMatrixChangedObservable = new Observable<Camera>();
+        public onAfterCheckInputsObservable = new Observable<Camera>();
+        public onRestoreStateObservable = new Observable<Camera>();
 
         // Cache
         private _computedViewMatrix = Matrix.Identity();
@@ -147,6 +157,44 @@
             }
 
             this.position = position;
+        }
+
+        private _storedFov: number;
+        private _stateStored: boolean;
+
+        /**
+         * Store current camera state (fov, position, etc..)
+         */
+        public storeState(): Camera {
+            this._stateStored = true;
+            this._storedFov = this.fov;
+
+            return this;
+        }
+
+        /**
+         * Restores the camera state values if it has been stored. You must call storeState() first
+         */
+        protected _restoreStateValues(): boolean {
+            if (!this._stateStored) {
+                return false;
+            }
+
+            this.fov = this._storedFov;
+
+            return true;
+        }
+
+        /**
+         * Restored camera state. You must call storeState() first
+         */
+        public restoreState(): boolean {
+            if (this._restoreStateValues()) {
+                this.onRestoreStateObservable.notifyObservers(this);
+                return true;
+            }
+
+            return false;
         }
 
         public getClassName(): string {
@@ -213,26 +261,6 @@
 
             this._cache.position.copyFrom(this.position);
             this._cache.upVector.copyFrom(this.upVector);
-
-            this._cache.mode = this.mode;
-            this._cache.minZ = this.minZ;
-            this._cache.maxZ = this.maxZ;
-
-            this._cache.fov = this.fov;
-            this._cache.fovMode = this.fovMode;
-            this._cache.aspectRatio = engine.getAspectRatio(this);
-
-            this._cache.orthoLeft = this.orthoLeft;
-            this._cache.orthoRight = this.orthoRight;
-            this._cache.orthoBottom = this.orthoBottom;
-            this._cache.orthoTop = this.orthoTop;
-            this._cache.renderWidth = engine.getRenderWidth();
-            this._cache.renderHeight = engine.getRenderHeight();
-        }
-
-        public _updateFromScene(): void {
-            this.updateCache();
-            this.update();
         }
 
         // Synchronized
@@ -285,13 +313,14 @@
         }
 
         public update(): void {
+            this._checkInputs();
             if (this.cameraRigMode !== Camera.RIG_MODE_NONE) {
                 this._updateRigCameras();
             }
-            this._checkInputs();
         }
 
         public _checkInputs(): void {
+            this.onAfterCheckInputsObservable.notifyObservers(this);
         }
 
         public get rigCameras(): Camera[] {
@@ -388,12 +417,14 @@
         }
 
         public getViewMatrix(force?: boolean): Matrix {
-            this._computedViewMatrix = this._computeViewMatrix(force);
-
             if (!force && this._isSynchronizedViewMatrix()) {
                 return this._computedViewMatrix;
             }
 
+            this.updateCache();
+            this._computedViewMatrix = this._getViewMatrix();
+            this._currentRenderId = this.getScene().getRenderId();
+            
             this._refreshFrustumPlanes = true;
 
             if (!this.parent || !this.parent.getWorldMatrix) {
@@ -417,21 +448,11 @@
                 this._computedViewMatrix.multiplyToRef(this._cameraRigParams.vrPreViewMatrix, this._computedViewMatrix);
             }
 
-            this._currentRenderId = this.getScene().getRenderId();
+            this.onViewMatrixChangedObservable.notifyObservers(this);
 
             return this._computedViewMatrix;
         }
 
-        public _computeViewMatrix(force?: boolean): Matrix {
-            if (!force && this._isSynchronizedViewMatrix()) {
-                return this._computedViewMatrix;
-            }
-
-            this._computedViewMatrix = this._getViewMatrix();
-            this._currentRenderId = this.getScene().getRenderId();
-
-            return this._computedViewMatrix;
-        }
 
         public freezeProjectionMatrix(projection?: Matrix): void {
             this._doNotComputeProjectionMatrix = true;
@@ -449,11 +470,21 @@
                 return this._projectionMatrix;
             }
 
+            // Cache
+            this._cache.mode = this.mode;
+            this._cache.minZ = this.minZ;
+            this._cache.maxZ = this.maxZ;
+        
+            // Matrix
             this._refreshFrustumPlanes = true;
 
             var engine = this.getEngine();
             var scene = this.getScene();
             if (this.mode === Camera.PERSPECTIVE_CAMERA) {
+                this._cache.fov = this.fov;
+                this._cache.fovMode = this.fovMode;
+                this._cache.aspectRatio = engine.getAspectRatio(this);
+                
                 if (this.minZ <= 0) {
                     this.minZ = 0.1;
                 }
@@ -473,28 +504,37 @@
                         this._projectionMatrix,
                         this.fovMode === Camera.FOVMODE_VERTICAL_FIXED);
                 }
-                return this._projectionMatrix;
+            } else {
+                var halfWidth = engine.getRenderWidth() / 2.0;
+                var halfHeight = engine.getRenderHeight() / 2.0;
+                if (scene.useRightHandedSystem) {
+                    Matrix.OrthoOffCenterRHToRef(this.orthoLeft || -halfWidth,
+                        this.orthoRight || halfWidth,
+                        this.orthoBottom || -halfHeight,
+                        this.orthoTop || halfHeight,
+                        this.minZ,
+                        this.maxZ,
+                        this._projectionMatrix);
+                } else {
+                    Matrix.OrthoOffCenterLHToRef(this.orthoLeft || -halfWidth,
+                        this.orthoRight || halfWidth,
+                        this.orthoBottom || -halfHeight,
+                        this.orthoTop || halfHeight,
+                        this.minZ,
+                        this.maxZ,
+                        this._projectionMatrix);
+                }
+
+                this._cache.orthoLeft = this.orthoLeft;
+                this._cache.orthoRight = this.orthoRight;
+                this._cache.orthoBottom = this.orthoBottom;
+                this._cache.orthoTop = this.orthoTop;
+                this._cache.renderWidth = engine.getRenderWidth();
+                this._cache.renderHeight = engine.getRenderHeight();                    
             }
 
-            var halfWidth = engine.getRenderWidth() / 2.0;
-            var halfHeight = engine.getRenderHeight() / 2.0;
-            if (scene.useRightHandedSystem) {
-                Matrix.OrthoOffCenterRHToRef(this.orthoLeft || -halfWidth,
-                    this.orthoRight || halfWidth,
-                    this.orthoBottom || -halfHeight,
-                    this.orthoTop || halfHeight,
-                    this.minZ,
-                    this.maxZ,
-                    this._projectionMatrix);
-            } else {
-                Matrix.OrthoOffCenterLHToRef(this.orthoLeft || -halfWidth,
-                    this.orthoRight || halfWidth,
-                    this.orthoBottom || -halfHeight,
-                    this.orthoTop || halfHeight,
-                    this.minZ,
-                    this.maxZ,
-                    this._projectionMatrix);
-            }
+            this.onProjectionMatrixChangedObservable.notifyObservers(this);
+
             return this._projectionMatrix;
         }
 
@@ -548,6 +588,17 @@
         } 
 
         public dispose(): void {
+            // Observables
+            this.onViewMatrixChangedObservable.clear();
+            this.onProjectionMatrixChangedObservable.clear();
+            this.onAfterCheckInputsObservable.clear();
+            this.onRestoreStateObservable.clear();
+
+            // Inputs
+            if (this.inputs) {
+                this.inputs.clear();
+            }
+
             // Animations
             this.getScene().stopAnimation(this);
 
@@ -562,6 +613,16 @@
             while (--i >= 0) {
                 this._postProcesses[i].dispose(this);
             }
+
+            // Render targets
+            var i = this.customRenderTargets.length;
+            while (--i >= 0) {
+                this.customRenderTargets[i].dispose();
+            }
+            this.customRenderTargets = [];
+
+            // Active Meshes
+            this._activeMeshes.dispose();
 
             super.dispose();
         }
@@ -644,7 +705,6 @@
                     this._rigCameras[1]._cameraRigParams.vrPreViewMatrix = metrics.rightPreViewMatrix;
                     this._rigCameras[1].getProjectionMatrix = this._rigCameras[1]._getVRProjectionMatrix;
 
-
                     if (metrics.compensateDistortion) {
                         this._rigCameras[0]._rigPostProcess = new VRDistortionCorrectionPostProcess("VR_Distort_Compensation_Left", this._rigCameras[0], false, metrics);
                         this._rigCameras[1]._rigPostProcess = new VRDistortionCorrectionPostProcess("VR_Distort_Compensation_Right", this._rigCameras[1], true, metrics);
@@ -677,14 +737,18 @@
                         this._rigCameras[1].getProjectionMatrix = this._getWebVRProjectionMatrix;
                         this._rigCameras[1].parent = this;
                         this._rigCameras[1]._getViewMatrix = this._getWebVRViewMatrix;
+
+                        if (Camera.UseAlternateWebVRRendering) {
+                            this._rigCameras[1]._skipRendering = true;
+                            this._rigCameras[0]._alternateCamera = this._rigCameras[1];
+                        }
                     }
                     break;
 
             }
 
             this._cascadePostProcessesToRigCams();
-            this.
-                update();
+            this.update();
         }
 
         private _getVRProjectionMatrix(): Matrix {

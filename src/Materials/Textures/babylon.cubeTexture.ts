@@ -14,11 +14,11 @@
             return new CubeTexture("", scene, null, noMipmap, files);
         }
 
-        public static CreateFromPrefilteredData(url: string, scene: Scene) {
-            return new CubeTexture(url, scene, null, false, null, null, null, undefined, true);
+        public static CreateFromPrefilteredData(url: string, scene: Scene, forcedExtension = null) {
+            return new CubeTexture(url, scene, null, false, null, null, null, undefined, true, forcedExtension);
         }
 
-        constructor(rootUrl: string, scene: Scene, extensions?: string[], noMipmap?: boolean, files?: string[], onLoad: () => void = null, onError: () => void = null, format: number = Engine.TEXTUREFORMAT_RGBA, prefiltered = false) {
+        constructor(rootUrl: string, scene: Scene, extensions?: string[], noMipmap?: boolean, files?: string[], onLoad: () => void = null, onError: () => void = null, format: number = Engine.TEXTUREFORMAT_RGBA, prefiltered = false, forcedExtension = null) {
             super(scene);
 
             this.name = rootUrl;
@@ -27,6 +27,11 @@
             this.hasAlpha = false;
             this._format = format;
             this._prefiltered = prefiltered;
+            this.isCube = true;
+            this._textureMatrix = Matrix.Identity();
+            if (prefiltered) {
+                this.gammaSpace = false;
+            }
 
             if (!rootUrl && !files) {
                 return;
@@ -54,10 +59,10 @@
             if (!this._texture) {
                 if (!scene.useDelayedTextureLoading) {
                     if (prefiltered) {
-                        this._texture = scene.getEngine().createPrefilteredCubeTexture(rootUrl, scene, this.lodGenerationScale, this.lodGenerationOffset, onLoad, onError, format);
+                        this._texture = scene.getEngine().createPrefilteredCubeTexture(rootUrl, scene, this.lodGenerationScale, this.lodGenerationOffset, onLoad, onError, format, forcedExtension);
                     }
                     else {
-                        this._texture = scene.getEngine().createCubeTexture(rootUrl, scene, files, noMipmap, onLoad, onError, this._format);
+                        this._texture = scene.getEngine().createCubeTexture(rootUrl, scene, files, noMipmap, onLoad, onError, this._format, forcedExtension);
                     }
                 } else {
                     this.delayLoadState = Engine.DELAYLOADSTATE_NOTLOADED;
@@ -66,16 +71,8 @@
                 if (this._texture.isReady) {
                     Tools.SetImmediate(() => onLoad());
                 } else {
-                    this._texture.onLoadedCallbacks.push(onLoad);
+                    this._texture.onLoadedObservable.add(onLoad);
                 }
-            }
-
-            this.isCube = true;
-
-            this._textureMatrix = Matrix.Identity();
-
-            if (prefiltered) {
-                this.gammaSpace = false;
             }
         }
 

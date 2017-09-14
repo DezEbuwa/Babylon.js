@@ -66,12 +66,14 @@ declare module BABYLON {
         * @param {number}: Defines the waves speed
         */
         waveSpeed: number;
+        protected _renderTargets: SmartArray<RenderTargetTexture>;
         private _mesh;
         private _refractionRTT;
         private _reflectionRTT;
         private _material;
         private _reflectionTransform;
         private _lastTime;
+        private _lastDeltaTime;
         private _renderId;
         private _useLogarithmicDepth;
         /**
@@ -97,6 +99,7 @@ declare module BABYLON {
         dispose(forceDisposeEffect?: boolean): void;
         clone(name: string): WaterMaterial;
         serialize(): any;
+        getClassName(): string;
         static Parse(source: any, scene: Scene, rootUrl: string): WaterMaterial;
         static CreateDefaultMesh(name: string, scene: Scene): Mesh;
     }

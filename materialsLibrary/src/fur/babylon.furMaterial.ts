@@ -6,6 +6,7 @@ module BABYLON {
         public HEIGHTMAP = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public NORMAL = false;
@@ -429,6 +430,10 @@ module BABYLON {
             
             return serializationObject;
         }
+
+        public getClassName(): string {
+            return "FurMaterial";
+        }          
 
         // Statics
         public static Parse(source: any, scene: Scene, rootUrl: string): FurMaterial {

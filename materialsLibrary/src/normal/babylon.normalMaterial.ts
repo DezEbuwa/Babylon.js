@@ -5,6 +5,7 @@ module BABYLON {
         public DIFFUSE = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public LIGHT0 = false;
@@ -332,6 +333,10 @@ module BABYLON {
             serializationObject.customType = "BABYLON.NormalMaterial";
             return serializationObject;
         }
+
+        public getClassName(): string {
+            return "NormalMaterial";
+        }        
 
         // Statics
         public static Parse(source: any, scene: Scene, rootUrl: string): NormalMaterial {

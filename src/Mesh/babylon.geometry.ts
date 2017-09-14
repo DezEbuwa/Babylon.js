@@ -22,6 +22,7 @@
         public _delayLoadingFunction: (any: any, geometry: Geometry) => void;
         public _softwareSkinningRenderId: number;
         private _vertexArrayObjects: { [key: string]: WebGLVertexArrayObject; };
+        private _updatable: boolean;
 
         // Cache
         public _positions: Vector3[];
@@ -52,6 +53,7 @@
             //Init vertex buffer cache
             this._vertexBuffers = {};
             this._indices = [];
+            this._updatable = updatable;
 
             // vertexData
             if (vertexData) {
@@ -104,6 +106,23 @@
             return true;
         }
 
+        public _rebuild(): void {
+            if (this._vertexArrayObjects) {
+                this._vertexArrayObjects = {};
+            }
+
+            // Index buffer
+            if (this._meshes.length !== 0 && this._indices) {
+                this._indexBuffer = this._engine.createIndexBuffer(this._indices);
+            }
+
+            // Vertex buffers
+            for (var key in this._vertexBuffers) {
+                let vertexBuffer = <VertexBuffer>this._vertexBuffers[key];
+                vertexBuffer._rebuild();
+            }
+        }
+
         public setAllVerticesData(vertexData: VertexData, updatable?: boolean): void {
             vertexData.applyToGeometry(this, updatable);
             this.notifyUpdate();
@@ -145,7 +164,7 @@
                 for (var index = 0; index < numOfMeshes; index++) {
                     var mesh = meshes[index];
                     mesh._boundingInfo = new BoundingInfo(this._extend.minimum, this._extend.maximum);
-                    mesh._createGlobalSubMesh();
+                    mesh._createGlobalSubMesh(false);
                     mesh.computeWorldMatrix(true);
                 }
             }
@@ -315,7 +334,7 @@
             var numOfMeshes = meshes.length;
 
             for (var index = 0; index < numOfMeshes; index++) {
-                meshes[index]._createGlobalSubMesh();
+                meshes[index]._createGlobalSubMesh(true);
             }
             this.notifyUpdate();
         }
@@ -432,7 +451,7 @@
                     }
                     mesh._boundingInfo = new BoundingInfo(this._extend.minimum, this._extend.maximum);
 
-                    mesh._createGlobalSubMesh();
+                    mesh._createGlobalSubMesh(false);
 
                     //bounding info was just created again, world matrix should be applied again.
                     mesh._updateBoundingInfo();
@@ -654,6 +673,7 @@
             var serializationObject: any = {};
 
             serializationObject.id = this.id;
+            serializationObject.updatable = this._updatable;
 
             if (Tags && Tags.HasTags(this)) {
                 serializationObject.tags = Tags.GetTags(this);
@@ -842,7 +862,7 @@
                 }
 
                 if (binaryInfo.matricesWeightsAttrDesc && binaryInfo.matricesWeightsAttrDesc.count > 0) {
-                    var matricesWeightsData = new Float32Array(parsedGeometry, binaryInfo.matricesWeightsAttrDesc.offset, binaryInfo.matricesWeightsAttrDesc.count);
+                    var matricesWeightsData = new Float32Array(parsedGeometry, binaryInfo.matricesWeightsAttrDesc.offset, binaryInfo.matricesWeightsAttrDesc.count);                    
                     mesh.setVerticesData(VertexBuffer.MatricesWeightsKind, matricesWeightsData, false);
                 }
 
@@ -939,10 +959,12 @@
                 }
 
                 if (parsedGeometry.matricesWeights) {
+                    Geometry._CleanMatricesWeights(parsedGeometry.matricesWeights, parsedGeometry.numBoneInfluencers);
                     mesh.setVerticesData(VertexBuffer.MatricesWeightsKind, parsedGeometry.matricesWeights, parsedGeometry.matricesWeights._updatable);
                 }
 
-                if (parsedGeometry.matricesWeightsExtra) {
+                if (parsedGeometry.matricesWeightsExtra) {                    
+                    Geometry._CleanMatricesWeights(parsedGeometry.matricesWeightsExtra, parsedGeometry.numBoneInfluencers);
                     mesh.setVerticesData(VertexBuffer.MatricesWeightsExtraKind, parsedGeometry.matricesWeightsExtra, parsedGeometry.matricesWeights._updatable);
                 }
 
@@ -974,12 +996,34 @@
             }
         }
 
+        private static _CleanMatricesWeights(matricesWeights: number[], influencers: number): void {
+            if (!SceneLoader.CleanBoneMatrixWeights) {
+                return;
+            }
+            let size = matricesWeights.length;
+            for (var i = 0; i < size; i += influencers) {
+                let weight = 0;
+                let biggerIndex = i;
+                let biggerWeight = 0;
+                for (var j = 0; j < influencers - 1; j++) {
+                    weight += matricesWeights[i + j];
+
+                    if (matricesWeights[i + j] > biggerWeight) {
+                        biggerWeight = matricesWeights[i + j];
+                        biggerIndex = i + j;
+                    }
+                }
+
+                matricesWeights[biggerIndex] += Math.max(0, 1.0 - weight);
+            }
+        }
+
         public static Parse(parsedVertexData: any, scene: Scene, rootUrl: string): Geometry {
             if (scene.getGeometryByID(parsedVertexData.id)) {
                 return null; // null since geometry could be something else than a box...
             }
 
-            var geometry = new Geometry(parsedVertexData.id, scene);
+            var geometry = new Geometry(parsedVertexData.id, scene, null, parsedVertexData.updatable);
 
             if (Tags) {
                 Tags.AddTagsTo(geometry, parsedVertexData.tags);

@@ -1,12 +1,4 @@
 ﻿module BABYLON {
-    export interface IRenderTargetOptions {
-        generateMipMaps: boolean,
-        type: number,
-        samplingMode: number,
-        generateDepthBuffer: boolean,
-        generateStencilBuffer: boolean
-    }
-
     export class RenderTargetTexture extends Texture {
         public static _REFRESHRATE_RENDER_ONCE: number = 0;
         public static _REFRESHRATE_RENDER_ONEVERYFRAME: number = 1;
@@ -38,13 +30,20 @@
         public renderSprites = false;
         public coordinatesMode = Texture.PROJECTION_MODE;
         public activeCamera: Camera;
-        public customRenderFunction: (opaqueSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, beforeTransparents?: () => void) => void;
+        public customRenderFunction: (opaqueSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, depthOnlySubMeshes: SmartArray<SubMesh>, beforeTransparents?: () => void) => void;
         public useCameraPostProcesses: boolean;
-        
+        public ignoreCameraViewport: boolean = false;
+
         private _postProcessManager: PostProcessManager;
         private _postProcesses: PostProcess[];
 
         // Events
+
+        /**
+        * An event triggered when the texture is unbind.
+        * @type {BABYLON.Observable}
+        */
+        public onBeforeBindObservable = new Observable<RenderTargetTexture>();
 
         /**
         * An event triggered when the texture is unbind.
@@ -102,6 +101,7 @@
             this._onClearObserver = this.onClearObservable.add(callback);
         }
 
+        public clearColor: Color4;
         protected _size: number;
         public _generateMipMaps: boolean;
         protected _renderingManager: RenderingManager;
@@ -111,8 +111,8 @@
         protected _refreshRate = 1;
         protected _textureMatrix: Matrix;
         protected _samples = 1;
-        protected _renderTargetOptions: IRenderTargetOptions;
-        public get renderTargetOptions(): IRenderTargetOptions {
+        protected _renderTargetOptions: RenderTargetCreationOptions;
+        public get renderTargetOptions(): RenderTargetCreationOptions {
             return this._renderTargetOptions;
         }
 
@@ -164,7 +164,7 @@
             if (this._samples === value) {
                 return;
             }
-            
+
             this._samples = this.getScene().getEngine().updateRenderTargetTextureSampleCount(this._texture, value);
         }
 
@@ -240,13 +240,6 @@
             return false;
         }
 
-        public isReady(): boolean {
-            if (!this.getScene().renderTargetsEnabled) {
-                return false;
-            }
-            return super.isReady();
-        }
-
         public getRenderSize(): number {
             return this._size;
         }
@@ -314,21 +307,22 @@
                 return;
             }
 
+            this.onBeforeBindObservable.notifyObservers(this);
+
             // Set custom projection.
             // Needs to be before binding to prevent changing the aspect ratio.
             let camera: Camera;
             if (this.activeCamera) {
                 camera = this.activeCamera;
-                engine.setViewport(this.activeCamera.viewport);
+                engine.setViewport(this.activeCamera.viewport, this._size, this._size);
 
-                if (this.activeCamera !== scene.activeCamera)
-                {
+                if (this.activeCamera !== scene.activeCamera) {
                     scene.setTransformMatrix(this.activeCamera.getViewMatrix(), this.activeCamera.getProjectionMatrix(true));
                 }
             }
             else {
                 camera = scene.activeCamera;
-                engine.setViewport(scene.activeCamera.viewport);
+                engine.setViewport(scene.activeCamera.viewport, this._size, this._size);
             }
 
             // Prepare renderingManager
@@ -348,7 +342,7 @@
                     }
 
                     mesh._preActivateForIntermediateRendering(sceneRenderId);
-                    
+
                     let isMasked;
                     if (!this.renderList) {
                         isMasked = ((mesh.layerMask & camera.layerMask) === 0);
@@ -369,16 +363,17 @@
             }
 
             for (var particleIndex = 0; particleIndex < scene.particleSystems.length; particleIndex++) {
-                    var particleSystem = scene.particleSystems[particleIndex];
+                var particleSystem = scene.particleSystems[particleIndex];
 
-                    if (!particleSystem.isStarted() || !particleSystem.emitter || !particleSystem.emitter.position || !particleSystem.emitter.isEnabled()) {
-                        continue;
-                    }
-
-                    if (currentRenderList.indexOf(particleSystem.emitter) >= 0) {
-                        this._renderingManager.dispatchParticles(particleSystem);
-                    }
+                let emitter: any = particleSystem.emitter;
+                if (!particleSystem.isStarted() || !emitter || !emitter.position || !emitter.isEnabled()) {
+                    continue;
                 }
+
+                if (currentRenderList.indexOf(emitter) >= 0) {
+                    this._renderingManager.dispatchParticles(particleSystem);
+                }
+            }
 
             if (this.isCube) {
                 for (var face = 0; face < 6; face++) {
@@ -400,7 +395,7 @@
             scene.resetCachedMaterial();
         }
 
-        private renderToTarget(faceIndex: number, currentRenderList: AbstractMesh[], currentRenderListLength:number, useCameraPostProcess: boolean, dumpForDebug: boolean): void {
+        private renderToTarget(faceIndex: number, currentRenderList: AbstractMesh[], currentRenderListLength: number, useCameraPostProcess: boolean, dumpForDebug: boolean): void {
             var scene = this.getScene();
             var engine = scene.getEngine();
 
@@ -409,11 +404,7 @@
                 this._postProcessManager._prepareFrame(this._texture, this._postProcesses);
             }
             else if (!useCameraPostProcess || !scene.postProcessManager._prepareFrame(this._texture)) {
-                if (this.isCube) {
-                    engine.bindFramebuffer(this._texture, faceIndex);
-                } else {
-                    engine.bindFramebuffer(this._texture);
-                }
+                engine.bindFramebuffer(this._texture, this.isCube ? faceIndex : undefined, undefined, undefined, this.ignoreCameraViewport);
             }
 
             this.onBeforeRenderObservable.notifyObservers(faceIndex);
@@ -422,7 +413,7 @@
             if (this.onClearObservable.hasObservers()) {
                 this.onClearObservable.notifyObservers(engine);
             } else {
-                engine.clear(scene.clearColor, true, true, true);
+                engine.clear(this.clearColor || scene.clearColor, true, true, true);
             }
 
             if (!this._doNotChangeAspectRatio) {
@@ -433,7 +424,7 @@
             this._renderingManager.render(this.customRenderFunction, currentRenderList, this.renderParticles, this.renderSprites);
 
             if (this._postProcessManager) {
-                this._postProcessManager._finalizeFrame(false, this._texture, faceIndex, this._postProcesses);
+                this._postProcessManager._finalizeFrame(false, this._texture, faceIndex, this._postProcesses, this.ignoreCameraViewport);
             }
             else if (useCameraPostProcess) {
                 scene.postProcessManager._finalizeFrame(false, this._texture, faceIndex);
@@ -458,7 +449,7 @@
                 }
 
                 engine.unBindFramebuffer(this._texture, this.isCube, () => {
-                    this.onAfterRenderObservable.notifyObservers(faceIndex);    
+                    this.onAfterRenderObservable.notifyObservers(faceIndex);
                 });
             } else {
                 this.onAfterRenderObservable.notifyObservers(faceIndex);
@@ -478,7 +469,7 @@
             opaqueSortCompareFn: (a: SubMesh, b: SubMesh) => number = null,
             alphaTestSortCompareFn: (a: SubMesh, b: SubMesh) => number = null,
             transparentSortCompareFn: (a: SubMesh, b: SubMesh) => number = null): void {
-            
+
             this._renderingManager.setRenderingOrder(renderingGroupId,
                 opaqueSortCompareFn,
                 alphaTestSortCompareFn,
@@ -491,7 +482,7 @@
          * @param renderingGroupId The rendering group id corresponding to its index
          * @param autoClearDepthStencil Automatically clears depth and stencil between groups if true.
          */
-        public setRenderingAutoClearDepthStencil(renderingGroupId: number, autoClearDepthStencil: boolean): void {            
+        public setRenderingAutoClearDepthStencil(renderingGroupId: number, autoClearDepthStencil: boolean): void {
             this._renderingManager.setRenderingAutoClearDepthStencil(renderingGroupId, autoClearDepthStencil);
         }
 
@@ -551,6 +542,8 @@
 
             this.clearPostProcesses(true);
 
+            this.renderList = null;
+
             // Remove from custom render targets
             var scene = this.getScene();
             var index = scene.customRenderTargets.indexOf(this);
@@ -568,6 +561,16 @@
             }
 
             super.dispose();
+        }
+
+        public _rebuild(): void {
+            if (this.refreshRate === RenderTargetTexture.REFRESHRATE_RENDER_ONCE) {
+                this.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+            }
+
+            if (this._postProcessManager) {
+                this._postProcessManager._rebuild();
+            }
         }
     }
 }

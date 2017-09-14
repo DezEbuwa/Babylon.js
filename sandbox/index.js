@@ -1,6 +1,4 @@
-﻿/// <reference path="../../babylon.js" />
-
-if (BABYLON.Engine.isSupported()) {
+﻿if (BABYLON.Engine.isSupported()) {
     var canvas = document.getElementById("renderCanvas");
     var engine = new BABYLON.Engine(canvas, true);
     var divFps = document.getElementById("fps");
@@ -16,13 +14,31 @@ if (BABYLON.Engine.isSupported()) {
     var filesInput;
     var currentHelpCounter;
     var currentScene;
+    var currentSkybox;
     var enableDebugLayer = false;
+    var currentPluginName;
 
     currentHelpCounter = localStorage.getItem("helpcounter");
 
     BABYLON.Engine.ShadersRepository = "/src/Shaders/";
 
     if (!currentHelpCounter) currentHelpCounter = 0;
+
+    // Setting up some GLTF values
+    BABYLON.SceneLoader.OnPluginActivatedObservable.add(function(plugin) {
+        currentPluginName = plugin.name;
+
+        if (plugin.name !== "gltf") {
+            return;
+        }
+        plugin.onBeforeMaterialReadyAsync = function(material, mesh, isLOD, callback) {
+            if (!isLOD) {
+                callback();
+                return;
+            }
+            material.forceCompilation(mesh, callback);
+        }
+    });
 
     // Resize
     window.addEventListener("resize", function () {
@@ -51,8 +67,37 @@ if (BABYLON.Engine.isSupported()) {
         // Attach camera to canvas inputs
         if (!currentScene.activeCamera || currentScene.lights.length === 0) {     
             currentScene.createDefaultCameraOrLight(true);
+            // Enable camera's behaviors
+            currentScene.activeCamera.useBouncingBehavior = true;
+            currentScene.activeCamera.useFramingBehavior = true;
+
+            var framingBehavior = currentScene.activeCamera.getBehaviorByName("Framing");
+            framingBehavior.framingTime = 0;
+            framingBehavior.elevationReturnWaitTime = -1;
+
+            var bouncingBehavior = currentScene.activeCamera.getBehaviorByName("Bouncing");
+            bouncingBehavior.autoTransitionRange = true;        
+
+            if (currentScene.meshes.length) {
+                // Let's zoom on the first object with geometry
+                for (var index = 0; index < currentScene.meshes.length; index++) {
+                    var mesh = currentScene.meshes[index];
+
+                    if (mesh.getTotalVertices()) {
+                        currentScene.activeCamera.setTarget(mesh);
+                        break;
+                    }
+                }
+            }
         }
-        currentScene.activeCamera.attachControl(canvas);
+
+        currentScene.activeCamera.attachControl(canvas); 
+
+        // Environment
+        if (currentPluginName === "gltf") {
+            var hdrTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("Assets/environment.dds", currentScene);
+            currentSkybox = currentScene.createDefaultSkybox(hdrTexture, true, (currentScene.activeCamera.maxZ - currentScene.activeCamera.minZ) / 2, 0.3);
+        }
 
         // In case of error during loading, meshes will be empty and clearColor is set to red
         if (currentScene.meshes.length === 0 && currentScene.clearColor.r === 1 && currentScene.clearColor.g === 0 && currentScene.clearColor.b === 0) {
@@ -78,7 +123,19 @@ if (BABYLON.Engine.isSupported()) {
         }
     };
 
-    filesInput = new BABYLON.FilesInput(engine, null, canvas, sceneLoaded);
+    filesInput = new BABYLON.FilesInput(engine, null, sceneLoaded);
+    filesInput.onProcessFileCallback = (function (file, name, extension) {
+        if (extension === "dds") {
+            BABYLON.FilesInput.FilesToLoad[name] = file;
+            var newHdrTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("file:" + file.correctName, currentScene);
+            if (currentSkybox) {
+                currentSkybox.dispose();
+            }
+            currentSkybox = currentScene.createDefaultSkybox(newHdrTexture, true, (currentScene.activeCamera.maxZ - currentScene.activeCamera.minZ) / 2, 0.3);
+            return false;
+        }
+        return true;
+    }).bind(this);
     filesInput.monitorElementForDragNDrop(canvas);
 
     window.addEventListener("keydown", function (evt) {

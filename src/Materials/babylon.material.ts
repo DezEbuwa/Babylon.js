@@ -285,6 +285,9 @@
         public alphaMode = Engine.ALPHA_COMBINE;
 
         @serialize()
+        public needDepthPrePass = false;
+
+        @serialize()
         public disableDepthWrite = false;
 
         @serialize("fogEnabled")
@@ -349,7 +352,7 @@
 
         constructor(name: string, scene: Scene, doNotAdd?: boolean) {
             this.name = name;
-            this.id = name;
+            this.id = name || Tools.RandomId();
 
             this._scene = scene || Engine.LastCreatedScene;
 
@@ -360,7 +363,7 @@
             }
 
             this._uniformBuffer = new UniformBuffer(this._scene.getEngine());
-            this._useUBO = this.getScene().getEngine().webGLVersion > 1;
+            this._useUBO = this.getScene().getEngine().supportsUniformBuffers;
 
             if (!doNotAdd) {
                 this._scene.materials.push(this);
@@ -470,6 +473,11 @@
 
         protected _afterBind(mesh: Mesh): void {
             this._scene._cachedMaterial = this;
+            if (mesh) {
+                this._scene._cachedVisibility = mesh.visibility;
+            } else {
+                this._scene._cachedVisibility = 1;
+            }
 
             this.onBindObservable.notifyObservers(mesh);
 
@@ -516,32 +524,60 @@
             return result;
         }
 
-        // Force shader compilation including textures ready check
-        public forceCompilation(mesh: AbstractMesh, onCompiled: (material: Material) => void, options?: { alphaTest: boolean }): void {
+        /**
+         * Force shader compilation including textures ready check
+         */
+        public forceCompilation(mesh: AbstractMesh, onCompiled: (material: Material) => void, options?: { alphaTest: boolean, clipPlane: boolean }): void {
             var subMesh = new BaseSubMesh();
             var scene = this.getScene();
             var engine = scene.getEngine();
 
-            var beforeRenderCallback = () => {
+            var checkReady = () => {
+                if (!this._scene || !this._scene.getEngine()) {
+                    return;
+                }
+
                 if (subMesh._materialDefines) {
                     subMesh._materialDefines._renderId = -1;
                 }
-                
-                var alphaTestState = engine.getAlphaTesting();
-                engine.setAlphaTesting(options ? options.alphaTest : this.needAlphaTesting());
-                
-                if (this.isReadyForSubMesh(mesh, subMesh)) {
-                    scene.unregisterBeforeRender(beforeRenderCallback);
 
-                    if (onCompiled) {
-                        onCompiled(this);
+                var alphaTestState = engine.getAlphaTesting();
+                var clipPlaneState = scene.clipPlane;
+
+                engine.setAlphaTesting(options ? options.alphaTest : this.needAlphaTesting());
+
+                if (options && options.clipPlane) {
+                    scene.clipPlane = new Plane(0, 0, 0, 1);
+                }
+
+                if (this.storeEffectOnSubMeshes) {
+                    if (this.isReadyForSubMesh(mesh, subMesh)) {
+                        if (onCompiled) {
+                            onCompiled(this);
+                        }
+                    }
+                    else {
+                        setTimeout(checkReady, 16);
+                    }
+                } else {
+                    if (this.isReady(mesh)) {
+                        if (onCompiled) {
+                            onCompiled(this);
+                        }
+                    }
+                    else {
+                        setTimeout(checkReady, 16);
                     }
                 }
 
                 engine.setAlphaTesting(alphaTestState);
+
+                if (options && options.clipPlane) {
+                    scene.clipPlane = clipPlaneState;
+                }
             };
 
-            scene.registerBeforeRender(beforeRenderCallback);
+            checkReady();
         }
        
         public markAsDirty(flag: number): void {
@@ -579,7 +615,7 @@
                     }
 
                     if (!subMesh._materialDefines) {
-                        return;
+                        continue;
                     }
 
                     func(subMesh._materialDefines);

@@ -14,7 +14,8 @@
       "referenceImage": "WCafe.png"
     },
     {
-      "title": "Espilit",
+      "title": "Espilit",      
+      "renderCount": 10,
       "sceneFolder": "/Scenes/Espilit/",
       "sceneFilename": "Espilit.binary.babylon",
       "referenceImage": "Espilit.png"
@@ -174,6 +175,7 @@
     },
      {
       "title": "PBR glossy",
+      "renderCount": 10,
       "scriptToRun": "/Demos/PBRGlossy/index.js",
       "functionToCall": "CreatePBRGlossyScene",
       "referenceImage": "pbrglossy.png"
@@ -187,10 +189,11 @@
     },
     {
       "title": "Reflection probes",
+      "renderCount": 10,
       "scriptToRun": "/Demos/RefProbe/reflectionProbe.js",
       "functionToCall": "CreateReflectionProbeTestScene ",
       "referenceImage": "refprobe.png"
-    },
+    },   
     {
       "title": "PBRMetallicRoughnessMaterial",
       "playgroundId": "#2FDQT5#13",
@@ -209,9 +212,15 @@
     {
       "title": "MultiSample render targets",
       "renderCount": 10,
-      "playgroundId": "#12MKMN",
+      "playgroundId": "#12MKMN#0",
       "referenceImage": "MultiSample render targets.png"
-    },            
+    },      
+    {
+      "title": "Default rendering pipeline",
+      "renderCount": 20,
+      "playgroundId": "#5XB8YT#2",
+      "referenceImage": "DefaultRenderingPipeline.png"
+    },             
     {
       "title": "Water material (only visual check)",
       "renderCount": 10,

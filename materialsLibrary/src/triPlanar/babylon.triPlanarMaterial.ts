@@ -12,6 +12,7 @@ module BABYLON {
         
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public SPECULARTERM = false;
@@ -409,6 +410,10 @@ module BABYLON {
             var serializationObject = SerializationHelper.Serialize(this);
             serializationObject.customType = "BABYLON.TriPlanarMaterial";
             return serializationObject;
+        }
+
+        public getClassName(): string {
+            return "TriPlanarMaterial";
         }
 
         // Statics

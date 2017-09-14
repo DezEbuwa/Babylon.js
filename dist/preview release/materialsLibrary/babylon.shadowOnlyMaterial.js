@@ -51,6 +51,16 @@ var BABYLON;
         ShadowOnlyMaterial.prototype.getAlphaTestTexture = function () {
             return null;
         };
+        Object.defineProperty(ShadowOnlyMaterial.prototype, "activeLight", {
+            get: function () {
+                return this._activeLight;
+            },
+            set: function (light) {
+                this._activeLight = light;
+            },
+            enumerable: true,
+            configurable: true
+        });
         // Methods   
         ShadowOnlyMaterial.prototype.isReadyForSubMesh = function (mesh, subMesh, useInstances) {
             if (this.isFrozen) {
@@ -69,6 +79,23 @@ var BABYLON;
                 }
             }
             var engine = scene.getEngine();
+            // Ensure that active light is the first shadow light
+            if (this._activeLight) {
+                for (var _i = 0, _a = mesh._lightSources; _i < _a.length; _i++) {
+                    var light = _a[_i];
+                    if (light.shadowEnabled) {
+                        if (this._activeLight === light) {
+                            break; // We are good
+                        }
+                        var lightPosition = mesh._lightSources.indexOf(this._activeLight);
+                        if (lightPosition !== -1) {
+                            mesh._lightSources.splice(lightPosition, 1);
+                            mesh._lightSources.splice(0, 0, this._activeLight);
+                        }
+                        break;
+                    }
+                }
+            }
             BABYLON.MaterialHelper.PrepareDefinesForFrameBoundValues(scene, engine, defines, useInstances);
             BABYLON.MaterialHelper.PrepareDefinesForMisc(mesh, scene, false, this.pointsCloud, this.fogEnabled, defines);
             defines._needNormals = BABYLON.MaterialHelper.PrepareDefinesForLights(scene, mesh, defines, false, 1);
@@ -172,19 +199,22 @@ var BABYLON;
             serializationObject.customType = "BABYLON.ShadowOnlyMaterial";
             return serializationObject;
         };
+        ShadowOnlyMaterial.prototype.getClassName = function () {
+            return "ShadowOnlyMaterial";
+        };
         // Statics
         ShadowOnlyMaterial.Parse = function (source, scene, rootUrl) {
             return BABYLON.SerializationHelper.Parse(function () { return new ShadowOnlyMaterial(source.name, scene); }, source, scene, rootUrl);
         };
+        __decorate([
+            BABYLON.serialize()
+        ], ShadowOnlyMaterial.prototype, "_worldViewProjectionMatrix", void 0);
         return ShadowOnlyMaterial;
     }(BABYLON.PushMaterial));
-    __decorate([
-        BABYLON.serialize()
-    ], ShadowOnlyMaterial.prototype, "_worldViewProjectionMatrix", void 0);
     BABYLON.ShadowOnlyMaterial = ShadowOnlyMaterial;
 })(BABYLON || (BABYLON = {}));
 
 //# sourceMappingURL=babylon.shadowOnlyMaterial.js.map
 
 BABYLON.Effect.ShadersStore['shadowOnlyVertexShader'] = "precision highp float;\n\nattribute vec3 position;\n#ifdef NORMAL\nattribute vec3 normal;\n#endif\n#include<bonesDeclaration>\n\n#include<instancesDeclaration>\nuniform mat4 view;\nuniform mat4 viewProjection;\n#ifdef POINTSIZE\nuniform float pointSize;\n#endif\n\nvarying vec3 vPositionW;\n#ifdef NORMAL\nvarying vec3 vNormalW;\n#endif\n#ifdef VERTEXCOLOR\nvarying vec4 vColor;\n#endif\n#include<clipPlaneVertexDeclaration>\n#include<fogVertexDeclaration>\n#include<__decl__lightFragment>[0..maxSimultaneousLights]\nvoid main(void) {\n#include<instancesVertex>\n#include<bonesVertex>\ngl_Position=viewProjection*finalWorld*vec4(position,1.0);\nvec4 worldPos=finalWorld*vec4(position,1.0);\nvPositionW=vec3(worldPos);\n#ifdef NORMAL\nvNormalW=normalize(vec3(finalWorld*vec4(normal,0.0)));\n#endif\n\n#include<clipPlaneVertex>\n\n#include<fogVertex>\n#include<shadowsVertex>[0..maxSimultaneousLights]\n\n#ifdef POINTSIZE\ngl_PointSize=pointSize;\n#endif\n}\n";
-BABYLON.Effect.ShadersStore['shadowOnlyPixelShader'] = "precision highp float;\n\nuniform vec3 vEyePosition;\n\nvarying vec3 vPositionW;\n#ifdef NORMAL\nvarying vec3 vNormalW;\n#endif\n\n#include<__decl__lightFragment>[0..maxSimultaneousLights]\n#include<lightsFragmentFunctions>\n#include<shadowsFragmentFunctions>\n#include<clipPlaneFragmentDeclaration>\n\n#include<fogFragmentDeclaration>\nvoid main(void) {\n#include<clipPlaneFragment>\nvec3 viewDirectionW=normalize(vEyePosition-vPositionW);\n\n#ifdef NORMAL\nvec3 normalW=normalize(vNormalW);\n#else\nvec3 normalW=vec3(1.0,1.0,1.0);\n#endif\n\nvec3 diffuseBase=vec3(0.,0.,0.);\nlightingInfo info;\nfloat shadow=1.;\nfloat glossiness=0.;\n#include<lightFragment>[0..1]\n\nvec4 color=vec4(0.,0.,0.,1.0-clamp(shadow,0.,1.));\n#include<fogFragment>\ngl_FragColor=color;\n}";
+BABYLON.Effect.ShadersStore['shadowOnlyPixelShader'] = "precision highp float;\n\nuniform vec3 vEyePosition;\n\nvarying vec3 vPositionW;\n#ifdef NORMAL\nvarying vec3 vNormalW;\n#endif\n\n#include<helperFunctions>\n\n#include<__decl__lightFragment>[0..maxSimultaneousLights]\n#include<lightsFragmentFunctions>\n#include<shadowsFragmentFunctions>\n#include<clipPlaneFragmentDeclaration>\n\n#include<fogFragmentDeclaration>\nvoid main(void) {\n#include<clipPlaneFragment>\nvec3 viewDirectionW=normalize(vEyePosition-vPositionW);\n\n#ifdef NORMAL\nvec3 normalW=normalize(vNormalW);\n#else\nvec3 normalW=vec3(1.0,1.0,1.0);\n#endif\n\nvec3 diffuseBase=vec3(0.,0.,0.);\nlightingInfo info;\nfloat shadow=1.;\nfloat glossiness=0.;\n#include<lightFragment>[0..1]\n\nvec4 color=vec4(0.,0.,0.,1.0-clamp(shadow,0.,1.));\n#include<fogFragment>\ngl_FragColor=color;\n}";

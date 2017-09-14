@@ -7,6 +7,7 @@ module BABYLON {
         public BUMP = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public SPECULARTERM = false;
@@ -418,6 +419,10 @@ module BABYLON {
             var serializationObject = SerializationHelper.Serialize(this);
             serializationObject.customType = "BABYLON.TerrainMaterial";
             return serializationObject;
+        }
+
+        public getClassName(): string {
+            return "TerrainMaterial";
         }
 
         // Statics

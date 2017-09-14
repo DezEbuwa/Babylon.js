@@ -594,7 +594,7 @@
                     }
                 }
 
-                outputLiminance = MathTools.Clamp(outputLiminance, this.hdrMinimumLuminance, 1e20);
+                outputLiminance = Scalar.Clamp(outputLiminance, this.hdrMinimumLuminance, 1e20);
 
                 effect.setFloat("averageLuminance", outputLiminance);
 
@@ -726,9 +726,8 @@
         }
 
         private _getDepthTexture(): Texture {
-            var geometry = this._scene.enableGeometryBufferRenderer();
-            if (geometry) {
-                return geometry.getGBuffer().textures[0];
+            if (this._scene.getEngine().getCaps().drawBuffersExtension) {
+                return this._scene.enableGeometryBufferRenderer().getGBuffer().textures[0];
             }
 
             return this._scene.enableDepthRenderer().getDepthMap();

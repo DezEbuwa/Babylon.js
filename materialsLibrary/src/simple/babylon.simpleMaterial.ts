@@ -5,6 +5,7 @@ module BABYLON {
         public DIFFUSE = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public NORMAL = false;
@@ -299,6 +300,10 @@ module BABYLON {
             return serializationObject;
         }
 
+        public getClassName(): string {
+            return "SimpleMaterial";
+        }               
+        
         // Statics
         public static Parse(source: any, scene: Scene, rootUrl: string): SimpleMaterial {
             return SerializationHelper.Parse(() => new SimpleMaterial(source.name, scene), source, scene, rootUrl);

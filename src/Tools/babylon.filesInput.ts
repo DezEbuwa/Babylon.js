@@ -1,45 +1,66 @@
 ﻿module BABYLON {
     export class FilesInput {
+        public static FilesToLoad: File[] = new Array<File>();
+
+        public onProcessFileCallback: (file: File, name: string, extension: string) => true = () => { return true; };
+
         private _engine: Engine;
         private _currentScene: Scene;
-        private _canvas: HTMLCanvasElement;
-        private _sceneLoadedCallback;
-        private _progressCallback;
-        private _additionnalRenderLoopLogicCallback;
-        private _textureLoadingCallback;
-        private _startingProcessingFilesCallback;
+        private _sceneLoadedCallback: (sceneFile: File, scene: Scene) => void;
+        private _progressCallback: (progress: ProgressEvent) => void;
+        private _additionalRenderLoopLogicCallback: () => void;
+        private _textureLoadingCallback: (remaining: number) => void;
+        private _startingProcessingFilesCallback: () => void;
+        private _onReloadCallback: (sceneFile: File) => void;
         private _elementToMonitor: HTMLElement;
-        public static FilesToLoad: File[] = new Array();
 
         private _sceneFileToLoad: File;
         private _filesToLoad: File[];
 
-        /// Register to core BabylonJS object: engine, scene, rendering canvas, callback function when the scene will be loaded,
-        /// loading progress callback and optionnal addionnal logic to call in the rendering loop
-        constructor(p_engine: Engine, p_scene: Scene, p_canvas: HTMLCanvasElement, p_sceneLoadedCallback,
-            p_progressCallback, p_additionnalRenderLoopLogicCallback, p_textureLoadingCallback, p_startingProcessingFilesCallback) {
-            this._engine = p_engine;
-            this._canvas = p_canvas;
-            this._currentScene = p_scene;
-            this._sceneLoadedCallback = p_sceneLoadedCallback;
-            this._progressCallback = p_progressCallback;
-            this._additionnalRenderLoopLogicCallback = p_additionnalRenderLoopLogicCallback;
-            this._textureLoadingCallback = p_textureLoadingCallback;
-            this._startingProcessingFilesCallback = p_startingProcessingFilesCallback;
+        constructor(engine: Engine, scene: Scene, sceneLoadedCallback: (sceneFile: File, scene: Scene) => void, progressCallback: (progress: ProgressEvent) => void, additionalRenderLoopLogicCallback: () => void, 
+                    textureLoadingCallback: (remaining: number) => void, startingProcessingFilesCallback: () => void, onReloadCallback: (sceneFile: File) => void) {
+            this._engine = engine;
+            this._currentScene = scene;
+
+            this._sceneLoadedCallback = sceneLoadedCallback;
+            this._progressCallback = progressCallback;
+            this._additionalRenderLoopLogicCallback = additionalRenderLoopLogicCallback;
+            this._textureLoadingCallback = textureLoadingCallback;
+            this._startingProcessingFilesCallback = startingProcessingFilesCallback;
+            this._onReloadCallback = onReloadCallback;
         }
 
-        public monitorElementForDragNDrop(p_elementToMonitor: HTMLElement): void {
-            if (p_elementToMonitor) {
-                this._elementToMonitor = p_elementToMonitor;
-                this._elementToMonitor.addEventListener("dragenter", (e) => { this.drag(e); }, false);
-                this._elementToMonitor.addEventListener("dragover", (e) => { this.drag(e); }, false);
-                this._elementToMonitor.addEventListener("drop", (e) => { this.drop(e); }, false);
+        private _dragEnterHandler: (any) => void;
+        private _dragOverHandler: (any) => void;
+        private _dropHandler: (any) => void;
+
+        public monitorElementForDragNDrop(elementToMonitor: HTMLElement): void {
+            if (elementToMonitor) {
+                this._elementToMonitor = elementToMonitor;
+
+                this._dragEnterHandler = (e) => { this.drag(e); };
+                this._dragOverHandler = (e) => { this.drag(e); };
+                this._dropHandler = (e) => { this.drop(e); };
+
+                this._elementToMonitor.addEventListener("dragenter", this._dragEnterHandler, false);
+                this._elementToMonitor.addEventListener("dragover", this._dragOverHandler, false);
+                this._elementToMonitor.addEventListener("drop", this._dropHandler, false);
             }
         }
 
+        public dispose() {
+            if (!this._elementToMonitor) {
+                return;
+            }
+
+            this._elementToMonitor.removeEventListener("dragenter", this._dragEnterHandler);
+            this._elementToMonitor.removeEventListener("dragover", this._dragOverHandler);
+            this._elementToMonitor.removeEventListener("drop", this._dropHandler);            
+        }
+
         private renderFunction(): void {
-            if (this._additionnalRenderLoopLogicCallback) {
-                this._additionnalRenderLoopLogicCallback();
+            if (this._additionalRenderLoopLogicCallback) {
+                this._additionalRenderLoopLogicCallback();
             }
 
             if (this._currentScene) {
@@ -66,6 +87,62 @@
             this.loadFiles(eventDrop);
         }
 
+        private _handleFolderDrop(entry: any, files: Array<any>, callback: () => void): void {
+            var reader = entry.createReader(),
+ 			relativePath = entry.fullPath.replace(/^\//, "").replace(/(.+?)\/?$/, "$1/");
+ 			reader.readEntries((fileEntries) => {
+                var remaining = fileEntries.length;
+                for (let fileEntry of fileEntries) {
+                    if (fileEntry.isFile) { // We only support one level
+                        fileEntry.file(function(file) {
+                            file.correctName = relativePath + file.name;
+                            files.push(file);
+            
+                            remaining--;
+
+                            if (remaining === 0) {
+                                callback();
+                            }
+                        });
+                    } else {
+                        remaining--;
+
+                        if (remaining === 0) {
+                            callback();
+                        }
+                    }
+                }
+            });
+        }
+
+        private _processFiles(files: Array<any>): void {
+            var skippedFiles = 0;
+            for (var i = 0; i < files.length; i++) {
+                var name = files[i].correctName.toLowerCase();
+                var extension = name.split('.').pop();
+
+                if (!this.onProcessFileCallback(files[i], name, extension)) {
+                    skippedFiles++;
+                    continue;
+                }
+
+                if ((extension === "babylon" || extension === "stl" || extension === "obj" || extension === "gltf" || extension === "glb") 
+                    && name.indexOf(".binary.babylon") === -1 && name.indexOf(".incremental.babylon") === -1) {
+                    this._sceneFileToLoad = files[i];
+                }
+                else {
+                    FilesInput.FilesToLoad[name] = files[i];
+                }
+            }
+
+            if (this._onReloadCallback) {
+                this._onReloadCallback(this._sceneFileToLoad);
+            }
+            else if (skippedFiles < files.length) {
+                this.reload();
+            }
+        }
+
         public loadFiles(event): void {
             if (this._startingProcessingFilesCallback) this._startingProcessingFilesCallback();
 
@@ -80,26 +157,59 @@
             }
 
             if (this._filesToLoad && this._filesToLoad.length > 0) {
+        
+                let files = [];
+                let folders = [];
+                var items = event.dataTransfer ? event.dataTransfer.items : null;
+
                 for (var i = 0; i < this._filesToLoad.length; i++) {
-                    let name = this._filesToLoad[i].name.toLowerCase();
-                    let extension = name.split('.').pop();
-                    let type = this._filesToLoad[i].type;
+                    let fileToLoad:any =  this._filesToLoad[i];
+                    let name = fileToLoad.name.toLowerCase();
+                    let type = fileToLoad.type;
+                    let entry;
+
+                    fileToLoad.correctName = name;
                     
-                    if ((extension === "babylon" || extension === "stl" || extension === "obj" || extension === "gltf" || extension === "glb") 
-                        && name.indexOf(".binary.babylon") === -1 && name.indexOf(".incremental.babylon") === -1) {
-                        this._sceneFileToLoad = this._filesToLoad[i];
+                    if (items) {
+                        let item = items[i];
+                        if (item.getAsEntry) {
+                            entry = item.getAsEntry();
+                        } else if (item.webkitGetAsEntry) {
+                            entry = item.webkitGetAsEntry();
+                        }                     
                     }
-                    else {
-                        FilesInput.FilesToLoad[name] = this._filesToLoad[i];
+
+                    if (!entry) {    
+                        files.push(fileToLoad);
+                    } else {
+                        if (entry.isDirectory) {
+                            folders.push(entry);
+                        } else {
+                            files.push(fileToLoad);
+                        }
                     }
                 }
 
-                this.reload();
+                if (folders.length === 0) {
+                    this._processFiles(files);
+                } else {
+                    var remaining = folders.length;
+
+                    // Extract folder content
+                    for (var folder of folders) {
+                        this._handleFolderDrop(folder, files, () => {
+                            remaining--;
+
+                            if (remaining === 0) {
+                                this._processFiles(files);
+                            }
+                        });
+                    }
+                }
             }
         }
 
         public reload() {
-            var that = this;
             // If a ".babylon" file has been provided
             if (this._sceneFileToLoad) {
                 if (this._currentScene) {
@@ -112,16 +222,17 @@
                 }
 
                 SceneLoader.Load("file:", this._sceneFileToLoad, this._engine, (newScene) => {
-                    that._currentScene = newScene;
+                    this._currentScene = newScene;
+
+                    if (this._sceneLoadedCallback) {
+                        this._sceneLoadedCallback(this._sceneFileToLoad, this._currentScene);
+                    }
 
                     // Wait for textures and shaders to be ready
-                    that._currentScene.executeWhenReady(() => {
-
-                        if (that._sceneLoadedCallback) {
-                            that._sceneLoadedCallback(this._sceneFileToLoad, that._currentScene);
-                        }
-                        that._engine.runRenderLoop(() => { that.renderFunction(); });
-                    });
+                    this._currentScene.executeWhenReady(() => {                       
+                        this._engine.runRenderLoop(() => { 
+                            this.renderFunction(); });
+                        });
                 }, progress => {
                         if (this._progressCallback) {
                             this._progressCallback(progress);

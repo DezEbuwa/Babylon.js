@@ -6,6 +6,7 @@ module BABYLON {
         public DIFFUSE = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public UV1 = false;
@@ -295,6 +296,10 @@ module BABYLON {
 
             return false;    
         }         
+
+        public getClassName(): string {
+            return "FireMaterial";
+        }        
 
         public dispose(forceDisposeEffect?: boolean): void {
             if (this._diffuseTexture) {

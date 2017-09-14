@@ -6,83 +6,6 @@
     export const ToLinearSpace = 2.2;
     export const Epsilon = 0.001;
 
-    export class MathTools {
-        /**
-         * Boolean : true if the absolute difference between a and b is lower than epsilon (default = 1.401298E-45)
-         */
-        public static WithinEpsilon(a: number, b: number, epsilon: number = 1.401298E-45): boolean {
-            var num = a - b;
-            return -epsilon <= num && num <= epsilon;
-        }
-
-        /**
-         * Returns a string : the upper case translation of the number i to hexadecimal.  
-         */
-        public static ToHex(i: number): string {
-            var str = i.toString(16);
-
-            if (i <= 15) {
-                return ("0" + str).toUpperCase();
-            }
-
-            return str.toUpperCase();
-        }
-
-        /**
-         * Returns -1 if value is negative and +1 is value is positive.  
-         * Returns the value itself if it's equal to zero.  
-         */
-        public static Sign(value: number): number {
-            value = +value; // convert to a number
-
-            if (value === 0 || isNaN(value))
-                return value;
-
-            return value > 0 ? 1 : -1;
-        }
-
-        /**
-         * Returns the value itself if it's between min and max.  
-         * Returns min if the value is lower than min.
-         * Returns max if the value is greater than max.  
-         */
-        public static Clamp(value: number, min = 0, max = 1): number {
-            return Math.min(max, Math.max(min, value));
-        }
-
-        /**
-         * Returns the log2 of value.
-         */
-        public static Log2(value: number): number {
-            return Math.log(value) * Math.LOG2E;
-        }
-    }
-
-
-    export class Scalar {
-        /**
-         * Creates a new scalar with values linearly interpolated of "amount" between the start scalar and the end scalar.
-         */
-        public static Lerp(start: number, end: number, amount: number): number {
-            return start + ((end - start) * amount);
-        }
-
-        /**
-         * Returns a new scalar located for "amount" (float) on the Hermite spline defined by the scalars "value1", "value3", "tangent1", "tangent2".
-         */
-        public static Hermite(value1: number, tangent1: number, value2: number, tangent2: number, amount: number): number {
-            var squared = amount * amount;
-            var cubed = amount * squared;
-            var part1 = ((2.0 * cubed) - (3.0 * squared)) + 1.0;
-            var part2 = (-2.0 * cubed) + (3.0 * squared);
-            var part3 = (cubed - (2.0 * squared)) + amount;
-            var part4 = cubed - squared;
-
-            return (((value1 * part1) + (value2 * part2)) + (tangent1 * part3)) + (tangent2 * part4);
-        }
-    }
-
-
     export class Color3 {
         /**
          * Creates a new Color3 object from red, green, blue values, all between 0 and 1.  
@@ -284,7 +207,7 @@
             var intR = (this.r * 255) | 0;
             var intG = (this.g * 255) | 0;
             var intB = (this.b * 255) | 0;
-            return "#" + MathTools.ToHex(intR) + MathTools.ToHex(intG) + MathTools.ToHex(intB);
+            return "#" + Scalar.ToHex(intR) + Scalar.ToHex(intG) + Scalar.ToHex(intB);
         }
 
         /**
@@ -377,6 +300,7 @@
         public static Magenta(): Color3 { return new Color3(1, 0, 1); }
         public static Yellow(): Color3 { return new Color3(1, 1, 0); }
         public static Gray(): Color3 { return new Color3(0.5, 0.5, 0.5); }
+        public static Teal(): Color3 { return new Color3(0, 1.0, 1.0); }
         public static Random(): Color3 { return new Color3(Math.random(), Math.random(), Math.random()); }
     }
 
@@ -384,7 +308,7 @@
         /**
          * Creates a new Color4 object from the passed float values ( < 1) : red, green, blue, alpha.  
          */
-        constructor(public r: number, public g: number, public b: number, public a: number) {
+        constructor(public r: number = 0, public g: number = 0, public b: number = 0, public a: number = 1) {
         }
 
         // Operators
@@ -556,8 +480,50 @@
             var intG = (this.g * 255) | 0;
             var intB = (this.b * 255) | 0;
             var intA = (this.a * 255) | 0;
-            return "#" + MathTools.ToHex(intR) + MathTools.ToHex(intG) + MathTools.ToHex(intB) + MathTools.ToHex(intA);
+            return "#" + Scalar.ToHex(intR) + Scalar.ToHex(intG) + Scalar.ToHex(intB) + Scalar.ToHex(intA);
         }
+
+        /**
+         * Returns a new Color4 converted to linear space.  
+         */
+        public toLinearSpace(): Color4 {
+            var convertedColor = new Color4();
+            this.toLinearSpaceToRef(convertedColor);
+            return convertedColor;
+        }
+
+        /**
+         * Converts the Color4 values to linear space and stores the result in "convertedColor".  
+         * Returns the unmodified Color4.  
+         */
+        public toLinearSpaceToRef(convertedColor: Color4): Color4 {
+            convertedColor.r = Math.pow(this.r, ToLinearSpace);
+            convertedColor.g = Math.pow(this.g, ToLinearSpace);
+            convertedColor.b = Math.pow(this.b, ToLinearSpace);
+            convertedColor.a = this.a;
+            return this;
+        }
+
+        /**
+         * Returns a new Color4 converted to gamma space.  
+         */
+        public toGammaSpace(): Color4 {
+            var convertedColor = new Color4();
+            this.toGammaSpaceToRef(convertedColor);
+            return convertedColor;
+        }
+
+        /**
+         * Converts the Color4 values to gamma space and stores the result in "convertedColor".  
+         * Returns the unmodified Color4.  
+         */
+        public toGammaSpaceToRef(convertedColor: Color4): Color4 {
+            convertedColor.r = Math.pow(this.r, ToGammaSpace);
+            convertedColor.g = Math.pow(this.g, ToGammaSpace);
+            convertedColor.b = Math.pow(this.b, ToGammaSpace);
+            convertedColor.a = this.a;
+            return this;
+        }        
 
         // Statics
         /**
@@ -830,7 +796,7 @@
          * Boolean : True if the passed vector coordinates are close to the current ones by a distance of epsilon.  
          */
         public equalsWithEpsilon(otherVector: Vector2, epsilon: number = Epsilon): boolean {
-            return otherVector && MathTools.WithinEpsilon(this.x, otherVector.x, epsilon) && MathTools.WithinEpsilon(this.y, otherVector.y, epsilon);
+            return otherVector && Scalar.WithinEpsilon(this.x, otherVector.x, epsilon) && Scalar.WithinEpsilon(this.y, otherVector.y, epsilon);
         }
 
         // Properties
@@ -1262,7 +1228,7 @@
          * Boolean : True if the current Vector3 and the passed vector coordinates are distant less than epsilon.
          */
         public equalsWithEpsilon(otherVector: Vector3, epsilon: number = Epsilon): boolean {
-            return otherVector && MathTools.WithinEpsilon(this.x, otherVector.x, epsilon) && MathTools.WithinEpsilon(this.y, otherVector.y, epsilon) && MathTools.WithinEpsilon(this.z, otherVector.z, epsilon);
+            return otherVector && Scalar.WithinEpsilon(this.x, otherVector.x, epsilon) && Scalar.WithinEpsilon(this.y, otherVector.y, epsilon) && Scalar.WithinEpsilon(this.z, otherVector.z, epsilon);
         }
 
         /**
@@ -1708,7 +1674,6 @@
         }
 
         private static _viewportMatrixCache: Matrix;
-        private static _matrixCache: Matrix;
         public static Project(vector: Vector3, world: Matrix, transform: Matrix, viewport: Viewport): Vector3 {
             var cw = viewport.width;
             var ch = viewport.height;
@@ -1723,7 +1688,7 @@
                 0, 0, 0.5, 0,
                 cx + cw / 2.0, ch / 2.0 + cy, 0.5, 1, viewportMatrix);
 
-            var matrix = Vector3._matrixCache ? Vector3._matrixCache : (Vector3._matrixCache = new Matrix());
+            var matrix = MathTmp.Matrix[0];
             world.multiplyToRef(transform, matrix);
             matrix.multiplyToRef(viewportMatrix, matrix);
 
@@ -1731,7 +1696,7 @@
         }
 
         public static UnprojectFromTransform(source: Vector3, viewportWidth: number, viewportHeight: number, world: Matrix, transform: Matrix): Vector3 {
-            var matrix = Vector3._matrixCache ? Vector3._matrixCache : (Vector3._matrixCache = new Matrix());
+            var matrix = MathTmp.Matrix[0];
             world.multiplyToRef(transform, matrix);
             matrix.invert();
             source.x = source.x / viewportWidth * 2 - 1;
@@ -1739,7 +1704,7 @@
             var vector = Vector3.TransformCoordinates(source, matrix);
             var num = source.x * matrix.m[3] + source.y * matrix.m[7] + source.z * matrix.m[11] + matrix.m[15];
 
-            if (MathTools.WithinEpsilon(num, 1.0)) {
+            if (Scalar.WithinEpsilon(num, 1.0)) {
                 vector = vector.scale(1.0 / num);
             }
 
@@ -1747,7 +1712,7 @@
         }
 
         public static Unproject(source: Vector3, viewportWidth: number, viewportHeight: number, world: Matrix, view: Matrix, projection: Matrix): Vector3 {
-            var matrix = Vector3._matrixCache ? Vector3._matrixCache : (Vector3._matrixCache = new Matrix());
+            var matrix = MathTmp.Matrix[0];
             world.multiplyToRef(view, matrix)
             matrix.multiplyToRef(projection, matrix);
             matrix.invert();
@@ -1755,7 +1720,7 @@
             var vector = Vector3.TransformCoordinates(screenSource, matrix);
             var num = screenSource.x * matrix.m[3] + screenSource.y * matrix.m[7] + screenSource.z * matrix.m[11] + matrix.m[15];
 
-            if (MathTools.WithinEpsilon(num, 1.0)) {
+            if (Scalar.WithinEpsilon(num, 1.0)) {
                 vector = vector.scale(1.0 / num);
             }
 
@@ -2013,10 +1978,10 @@
          */
         public equalsWithEpsilon(otherVector: Vector4, epsilon: number = Epsilon): boolean {
             return otherVector
-                && MathTools.WithinEpsilon(this.x, otherVector.x, epsilon)
-                && MathTools.WithinEpsilon(this.y, otherVector.y, epsilon)
-                && MathTools.WithinEpsilon(this.z, otherVector.z, epsilon)
-                && MathTools.WithinEpsilon(this.w, otherVector.w, epsilon);
+                && Scalar.WithinEpsilon(this.x, otherVector.x, epsilon)
+                && Scalar.WithinEpsilon(this.y, otherVector.y, epsilon)
+                && Scalar.WithinEpsilon(this.z, otherVector.z, epsilon)
+                && Scalar.WithinEpsilon(this.w, otherVector.w, epsilon);
         }
 
         /**
@@ -4422,7 +4387,7 @@
         }
 
         public toGlobal(renderWidthOrEngine: number | Engine, renderHeight: number): Viewport {
-            if ((<Engine>renderWidthOrEngine)._gl) {
+            if ((<Engine>renderWidthOrEngine).getRenderWidth) {
                 var engine = (<Engine>renderWidthOrEngine);
                 return this.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
             }
@@ -4930,13 +4895,13 @@
 
             if (va === undefined || va === null) {
                 var point: Vector3;
-                if (!MathTools.WithinEpsilon(Math.abs(vt.y) / tgl, 1.0, Epsilon)) {     // search for a point in the plane
+                if (!Scalar.WithinEpsilon(Math.abs(vt.y) / tgl, 1.0, Epsilon)) {     // search for a point in the plane
                     point = new Vector3(0.0, -1.0, 0.0);
                 }
-                else if (!MathTools.WithinEpsilon(Math.abs(vt.x) / tgl, 1.0, Epsilon)) {
+                else if (!Scalar.WithinEpsilon(Math.abs(vt.x) / tgl, 1.0, Epsilon)) {
                     point = new Vector3(1.0, 0.0, 0.0);
                 }
-                else if (!MathTools.WithinEpsilon(Math.abs(vt.z) / tgl, 1.0, Epsilon)) {
+                else if (!Scalar.WithinEpsilon(Math.abs(vt.z) / tgl, 1.0, Epsilon)) {
                     point = new Vector3(0.0, 0.0, 1.0);
                 }
                 normal0 = Vector3.Cross(vt, point);

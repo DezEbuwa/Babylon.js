@@ -12,11 +12,15 @@ Getting started? Play directly with the Babylon.js API via our [playground](http
 - https://cdn.babylonjs.com/babylon.max.js
 - https://cdn.babylonjs.com/babylon.worker.js
 
+Additional references can be found on https://cdn.babylonjs.com/xxx where xxx is the folder structure you can find in the /dist folder like https://cdn.babylonjs.com/gui/babylon.gui.min.js
+
 For preview release you can use the following ones:
 
-- http://preview.babylonjs.com/babylon.js
-- http://preview.babylonjs.com/babylon.max.js
-- http://preview.babylonjs.com/babylon.worker.js
+- https://preview.babylonjs.com/babylon.js
+- https://preview.babylonjs.com/babylon.max.js
+- https://preview.babylonjs.com/babylon.worker.js
+
+Additional references can be found on https://preview.babylonjs.com/xxx where xxx is the folder structure you can find in the /dist/preview release folder like https://preview.babylonjs.com/gui/babylon.gui.min.js
 
 ## Preview release
 
@@ -25,7 +29,6 @@ If you want to contribute, please read our [contribution guidelines](https://git
 
 ## Documentation
 - [Documentation](http://doc.babylonjs.com)
-- [Roadmap](http://doc.babylonjs.com/generals/Roadmap)
 - [Samples](https://github.com/BabylonJS/Samples)
 - [Video overview (1 hour) of BabylonJS features](http://www.youtube.com/watch?v=z80TYMqsdEM)
 - [Complete course (8 hours)](http://www.microsoftvirtualacademy.com/training-courses/introduction-to-webgl-3d-with-html5-and-babylon-js)

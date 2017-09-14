@@ -16,6 +16,8 @@
             scene.multiMaterials.push(this);
 
             this.subMaterials = new Array<Material>();
+
+            this.storeEffectOnSubMeshes = true; // multimaterial is considered like a push material
         }
 
         private _hookArray(array: Material[]): void {
@@ -56,10 +58,17 @@
             return "MultiMaterial";
         }
 
-        public isReady(mesh?: AbstractMesh): boolean {
+        public isReadyForSubMesh(mesh: AbstractMesh, subMesh: BaseSubMesh, useInstances?: boolean): boolean {
             for (var index = 0; index < this.subMaterials.length; index++) {
                 var subMaterial = this.subMaterials[index];
                 if (subMaterial) {
+                    if (this.subMaterials[index].storeEffectOnSubMeshes) {
+                        if (!this.subMaterials[index].isReadyForSubMesh(mesh, subMesh, useInstances)) {
+                            return false;
+                        }
+                        continue;
+                    }
+
                     if (!this.subMaterials[index].isReady(mesh)) {
                         return false;
                     }
@@ -107,5 +116,18 @@
             return serializationObject;
         }
 
+        public dispose(forceDisposeEffect?: boolean, forceDisposeTextures?: boolean): void {
+            var scene = this.getScene();
+            if (!scene) {
+                return;
+            }
+
+            var index = scene.multiMaterials.indexOf(this);
+            if (index >= 0) {
+                scene.multiMaterials.splice(index, 1);
+            }
+
+            super.dispose(forceDisposeEffect, forceDisposeTextures);
+        }
     }
 } 

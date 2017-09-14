@@ -63,6 +63,12 @@
 
             this._vertexBuffers[VertexBuffer.PositionKind] = new VertexBuffer(engine, vertices, VertexBuffer.PositionKind, false, false, 2);
 
+            this._createIndexBuffer();
+        }
+
+        private _createIndexBuffer(): void {
+            var engine = this.getScene().getEngine();
+
             // Indices
             var indices = [];
             indices.push(0);
@@ -74,6 +80,15 @@
             indices.push(3);
 
             this._indexBuffer = engine.createIndexBuffer(indices);
+        }
+
+        public _rebuild(): void {
+            this._vertexBuffers[VertexBuffer.PositionKind]._rebuild();
+            this._createIndexBuffer();
+
+            if (this.refreshRate === RenderTargetTexture.REFRESHRATE_RENDER_ONCE) {
+                this.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+            }            
         }
 
         public reset(): void {
@@ -113,7 +128,7 @@
 
                     if (this._fallbackTexture) {
                         this._texture = this._fallbackTexture._texture;
-                        this._texture.references++;
+                        this._texture.incrementReferences();
                     }
 
                     this._fallbackTextureUsed = true;
@@ -291,7 +306,7 @@
 
             if (this.isCube) {
                 for (var face = 0; face < 6; face++) {
-                    engine.bindFramebuffer(this._texture, face);
+                    engine.bindFramebuffer(this._texture, face, undefined, undefined, true);
 
                     // VBOs
                     engine.bindBuffers(this._vertexBuffers, this._indexBuffer, this._effect);
@@ -310,7 +325,7 @@
                     }
                 }
             } else {
-                engine.bindFramebuffer(this._texture);
+                engine.bindFramebuffer(this._texture, 0, undefined, undefined, true);
 
                 // VBOs
                 engine.bindBuffers(this._vertexBuffers, this._indexBuffer, this._effect);

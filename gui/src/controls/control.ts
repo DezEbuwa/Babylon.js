@@ -9,13 +9,14 @@ module BABYLON.GUI {
         public _host: AdvancedDynamicTexture;
         public _currentMeasure = Measure.Empty();
         private _fontFamily = "Arial";
+        private _fontStyle = "";
         private _fontSize = new ValueAndUnit(18, ValueAndUnit.UNITMODE_PIXEL, false);
         private _font: string;
         public _width = new ValueAndUnit(1, ValueAndUnit.UNITMODE_PERCENTAGE, false);
         public _height = new ValueAndUnit(1, ValueAndUnit.UNITMODE_PERCENTAGE, false);
         private _lastMeasuredFont: string;
         protected _fontOffset: {ascent: number, height: number, descent: number};
-        private _color = "white";
+        private _color = "";
         protected _horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
         protected _verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
         private _isDirty = true;
@@ -43,9 +44,11 @@ module BABYLON.GUI {
         private _dummyVector2 = Vector2.Zero();
         private _downCount = 0;
         private _enterCount = 0;
+        private _doNotRender = false;
 
         public isHitTestVisible = true;
         public isPointerBlocker = false;
+        public isFocusInvisible = false;
 
         protected _linkOffsetX = new ValueAndUnit(0);
         protected _linkOffsetY = new ValueAndUnit(0);
@@ -242,6 +245,19 @@ module BABYLON.GUI {
             this._fontSet = true;
         }
 
+        public get fontStyle(): string {
+            return this._fontStyle;
+        }
+
+        public set fontStyle(value: string) {
+            if (this._fontStyle === value) {
+                return;
+            }
+
+            this._fontStyle = value;
+            this._fontSet = true;
+        }        
+
         public get fontSize(): string | number  {
             return this._fontSize.toString(this._host);
         }
@@ -284,6 +300,19 @@ module BABYLON.GUI {
             if (this._root) {
                 this._root._reOrderControl(this);
             }
+        }
+
+        public get notRenderable(): boolean {
+            return this._doNotRender;
+        }
+
+        public set notRenderable(value: boolean) {
+            if (this._doNotRender === value) {
+                return;
+            }
+
+            this._doNotRender = value;
+            this._markAsDirty();
         }
 
         public get isVisible(): boolean {
@@ -429,10 +458,10 @@ module BABYLON.GUI {
             this._moveToProjectedPosition(projectedPosition);
 
             if (projectedPosition.z < 0 || projectedPosition.z > 1) {
-                this.isVisible = false;
+                this.notRenderable = true;
                 return;
             }
-            this.isVisible = true;
+            this.notRenderable = false;
         }
 
         public linkWithMesh(mesh: AbstractMesh): void {
@@ -441,8 +470,12 @@ module BABYLON.GUI {
                 return;
             }
 
-            if (this._host._linkedControls.indexOf(this) !== -1) {
+            var index = this._host._linkedControls.indexOf(this);
+            if (index !== -1) {
                 this._linkedMesh = mesh;
+                if (!mesh) {
+                    this._host._linkedControls.splice(index, 1);
+                }
                 return;
             }
 
@@ -520,8 +553,8 @@ module BABYLON.GUI {
 
         protected _applyStates(context: CanvasRenderingContext2D): void {
             if (this._fontSet) {
-                this._fontSet = false;
                 this._prepareFont();
+                this._fontSet = false;
             }
 
             if (this._font) {
@@ -732,7 +765,7 @@ module BABYLON.GUI {
         }
 
         public _processPicking(x: number, y: number, type: number): boolean {
-            if (!this.isHitTestVisible || !this.isVisible) {
+            if (!this.isHitTestVisible || !this.isVisible || this._doNotRender) {
                 return false;
             }
 
@@ -764,7 +797,7 @@ module BABYLON.GUI {
             return true;
         }
 
-        protected _onPointerOut(): void {
+        public _onPointerOut(): void {
             this._enterCount = 0;
             if (this.onPointerOutObservable.hasObservers()) {
                 this.onPointerOutObservable.notifyObservers(this);
@@ -816,6 +849,7 @@ module BABYLON.GUI {
             if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
                 this._onPointerDown(this._dummyVector2);
                 this._host._lastControlDown = this;
+                this._host._lastPickedControl = this;
                 return true;
             }
 
@@ -831,13 +865,22 @@ module BABYLON.GUI {
         }
 
         private _prepareFont() {
-            if (!this._fontFamily) {
+            if (!this._font && !this._fontSet) {
                 return;
             }
 
-            this._font = this._fontSize.getValue(this._host) + "px " + this._fontFamily;
+            this._font = this._fontStyle + " " + this._fontSize.getValue(this._host) + "px " + this._fontFamily;
         
             this._fontOffset = Control._GetFontOffset(this._font);
+        }
+
+        public dispose() {
+            this.onDirtyObservable.clear();
+            this.onPointerDownObservable.clear();
+            this.onPointerEnterObservable.clear();
+            this.onPointerMoveObservable.clear();
+            this.onPointerOutObservable.clear();
+            this.onPointerUpObservable.clear();
         }
 
         // Statics

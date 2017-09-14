@@ -5,6 +5,7 @@ module BABYLON {
         public DIFFUSE = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public LIGHT0 = false;
@@ -295,6 +296,10 @@ module BABYLON {
             serializationObject.customType = "BABYLON.GradientMaterial";
             return serializationObject;
         }
+
+        public getClassName(): string {
+            return "GradientMaterial";
+        }              
 
         // Statics
         public static Parse(source: any, scene: Scene, rootUrl: string): GradientMaterial {

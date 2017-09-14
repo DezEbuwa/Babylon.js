@@ -89,7 +89,13 @@ function determineFilesToProcess(kind) {
     for (var index = 0; index < buildConfiguration.length; index++) {
         var dependencyName = buildConfiguration[index];
         var dependency = config.workloads[dependencyName];
-        processDependency(kind, dependency, filesToLoad);
+
+        if (kind === "directFiles" && !dependency) {
+            filesToLoad.push("../../dist/preview release/" + dependencyName);
+        }
+        else if (dependency) {
+            processDependency(kind, dependency, filesToLoad);
+        }
     }
 
     if (kind === "shaderIncludes") {
@@ -181,11 +187,13 @@ gulp.task("buildWorker", ["workers", "shaders"], function () {
 
 gulp.task("build", ["shaders"], function () {
     var filesToProcess = determineFilesToProcess("files");
+    var directFilesToProcess = determineFilesToProcess("directFiles");
     return merge2(
         gulp.src(filesToProcess).
             pipe(expect.real({ errorOnFailure: true }, filesToProcess)),
         shadersStream,
-        includeShadersStream
+        includeShadersStream,
+        gulp.src(directFilesToProcess)
     )
         .pipe(concat(config.build.filename))
         .pipe(cleants())
@@ -284,16 +292,28 @@ var buildExternalLibrary = function (library, settings, watch) {
         return merge2([shader, includeShader, dev, css]);
     }
     else {
-        var code = merge2([tsProcess.js, shader, includeShader])
-            .pipe(concat(library.output))
-            .pipe(gulp.dest(outputDirectory))
-            .pipe(cleants())
-            .pipe(replace(extendsSearchRegex, ""))
-            .pipe(replace(decorateSearchRegex, ""))
-            .pipe(rename({ extname: ".min.js" }))
-            .pipe(uglify())
-            .pipe(optimisejs())
-            .pipe(gulp.dest(outputDirectory));
+        if (library.bundle) {
+            // Don't remove extends and decorate functions
+            var code = merge2([tsProcess.js, shader, includeShader])
+                .pipe(concat(library.output))
+                .pipe(gulp.dest(outputDirectory))
+                .pipe(cleants())
+                .pipe(rename({ extname: ".min.js" }))
+                .pipe(uglify())
+                .pipe(optimisejs())
+                .pipe(gulp.dest(outputDirectory));
+        } else {
+            var code = merge2([tsProcess.js, shader, includeShader])
+                .pipe(concat(library.output))
+                .pipe(gulp.dest(outputDirectory))
+                .pipe(cleants())
+                .pipe(replace(extendsSearchRegex, ""))
+                .pipe(replace(decorateSearchRegex, ""))
+                .pipe(rename({ extname: ".min.js" }))
+                .pipe(uglify())
+                .pipe(optimisejs())
+                .pipe(gulp.dest(outputDirectory));
+        }
 
         var dts = tsProcess.dts
             .pipe(concat(library.output))
@@ -301,7 +321,18 @@ var buildExternalLibrary = function (library, settings, watch) {
             .pipe(rename({ extname: ".d.ts" }))
             .pipe(gulp.dest(outputDirectory));
 
-        var waitAll = merge2([dev, code, css, dts]);
+        var waitAll;
+
+        if (library.buildAsModule) {
+            var dts2 = tsProcess.dts
+            .pipe(concat(library.output))
+            .pipe(addDtsExport(library.moduleDeclaration))
+            .pipe(rename({ extname: ".module.d.ts" }))
+            .pipe(gulp.dest(outputDirectory));
+            waitAll = merge2([dev, code, css, dts, dts2]);
+        } else {
+            waitAll = merge2([dev, code, css, dts]);
+        }
 
         if (library.webpack) {
             return waitAll.on('end', function () {
@@ -418,7 +449,7 @@ gulp.task('webserver', function () {
     gulp.src('../../.').pipe(webserver({
         port: 1338,
         livereload: false
-        }));
+    }));
 });
 
 /**

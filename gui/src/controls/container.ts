@@ -63,6 +63,8 @@ module BABYLON.GUI {
             }
             control._link(this, this._host);
 
+            control._markAllAsDirty();
+
             this._reOrderControl(control);
 
             this._markAsDirty();
@@ -127,7 +129,7 @@ module BABYLON.GUI {
         }
 
         public _draw(parentMeasure: Measure, context: CanvasRenderingContext2D): void {      
-            if (!this.isVisible) {
+            if (!this.isVisible || this.notRenderable) {
                 return;
             }
             context.save();
@@ -139,7 +141,7 @@ module BABYLON.GUI {
 
                 this._clipForChildren(context);
                 for (var child of this._children) {
-                    if (child.isVisible) {
+                    if (child.isVisible && !child.notRenderable) {
                         child._draw(this._measureForChildren, context);
                     }
                 }
@@ -148,7 +150,7 @@ module BABYLON.GUI {
         }
 
         public _processPicking(x: number, y: number, type: number): boolean {
-            if (!this.isHitTestVisible || !this.isVisible) {
+            if (!this.isHitTestVisible || !this.isVisible || this.notRenderable) {
                 return false;
             }
 
@@ -175,6 +177,14 @@ module BABYLON.GUI {
             super._additionalProcessing(parentMeasure, context);
 
             this._measureForChildren.copyFrom(this._currentMeasure);
+        }
+
+        public dispose() {
+            super.dispose();
+
+            for (var control of this._children) {
+                control.dispose();
+            }
         }
     }    
 }

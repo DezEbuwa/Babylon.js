@@ -21,6 +21,7 @@ module BABYLON {
         public SPECULAROVERALPHA = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public ALPHAFROMDIFFUSE = false;
         public POINTSIZE = false;
         public FOG = false;
@@ -62,8 +63,6 @@ module BABYLON {
         public REFRACTION = false;
         public REFRACTIONMAP_3D = false;
         public REFLECTIONOVERALPHA = false;
-        public INVERTNORMALMAPX = false;
-        public INVERTNORMALMAPY = false;
         public TWOSIDEDLIGHTING = false;
         public SHADOWFLOAT = false;
         public MORPHTARGETS = false;
@@ -430,6 +429,25 @@ module BABYLON {
             this._imageProcessingConfiguration.colorGradingTexture = value;
         }
 
+        /**
+         * The color grading curves provide additional color adjustmnent that is applied after any color grading transform (3D LUT). 
+         * They allow basic adjustment of saturation and small exposure adjustments, along with color filter tinting to provide white balance adjustment or more stylistic effects.
+         * These are similar to controls found in many professional imaging or colorist software. The global controls are applied to the entire image. For advanced tuning, extra controls are provided to adjust the shadow, midtone and highlight areas of the image; 
+         * corresponding to low luminance, medium luminance, and high luminance areas respectively.
+         */
+        public get cameraColorCurves(): ColorCurves {
+            return this._imageProcessingConfiguration.colorCurves;
+        }
+        /**
+         * The color grading curves provide additional color adjustmnent that is applied after any color grading transform (3D LUT). 
+         * They allow basic adjustment of saturation and small exposure adjustments, along with color filter tinting to provide white balance adjustment or more stylistic effects.
+         * These are similar to controls found in many professional imaging or colorist software. The global controls are applied to the entire image. For advanced tuning, extra controls are provided to adjust the shadow, midtone and highlight areas of the image; 
+         * corresponding to low luminance, medium luminance, and high luminance areas respectively.
+         */
+        public set cameraColorCurves(value: ColorCurves) {
+            this._imageProcessingConfiguration.colorCurves = value;
+        }        
+
         public customShaderNameResolve: (shaderName: string, uniforms: string[], uniformBuffers: string[], samplers: string[], defines: StandardMaterialDefines) => string;
 
         protected _renderTargets = new SmartArray<RenderTargetTexture>(16);
@@ -640,9 +658,6 @@ module BABYLON {
                         } else {
                             MaterialHelper.PrepareDefinesForMergedUV(this._bumpTexture, defines, "BUMP");
 
-                            defines.INVERTNORMALMAPX = this.invertNormalMapX;
-                            defines.INVERTNORMALMAPY = this.invertNormalMapY;
-
                             defines.PARALLAX = this._useParallax;
                             defines.PARALLAXOCCLUSION = this._useParallaxOcclusion;
                         }
@@ -727,12 +742,6 @@ module BABYLON {
 
             // Values that need to be evaluated on every frame
             MaterialHelper.PrepareDefinesForFrameBoundValues(scene, engine, defines, useInstances);
-
-            if (scene._mirroredCameraPosition && defines.BUMP) {
-                defines.INVERTNORMALMAPX = !this.invertNormalMapX;
-                defines.INVERTNORMALMAPY = !this.invertNormalMapY;
-                defines.markAsUnprocessed();
-            }
 
             // Get correct effect      
             if (defines.isDirty) {
@@ -834,7 +843,7 @@ module BABYLON {
                     "mBones",
                     "vClipPlane", "diffuseMatrix", "ambientMatrix", "opacityMatrix", "reflectionMatrix", "emissiveMatrix", "specularMatrix", "bumpMatrix", "lightmapMatrix", "refractionMatrix",
                     "diffuseLeftColor", "diffuseRightColor", "opacityParts", "reflectionLeftColor", "reflectionRightColor", "emissiveLeftColor", "emissiveRightColor", "refractionLeftColor", "refractionRightColor",
-                    "logarithmicDepthConstant"
+                    "logarithmicDepthConstant", "vNormalReoderParams"
                 ];
 
                 var samplers = ["diffuseSampler", "ambientSampler", "opacitySampler", "reflectionCubeSampler", "reflection2DSampler", "emissiveSampler", "specularSampler", "bumpSampler", "lightmapSampler", "refractionCubeSampler", "refraction2DSampler"]
@@ -911,6 +920,7 @@ module BABYLON {
             this._uniformBuffer.addUniform("lightmapMatrix", 16);
             this._uniformBuffer.addUniform("specularMatrix", 16);
             this._uniformBuffer.addUniform("bumpMatrix", 16);
+            this._uniformBuffer.addUniform("vNormalReoderParams", 4);
             this._uniformBuffer.addUniform("refractionMatrix", 16);
             this._uniformBuffer.addUniform("vRefractionInfos", 4);
             this._uniformBuffer.addUniform("vSpecularColor", 4);
@@ -949,9 +959,12 @@ module BABYLON {
             // Matrices        
             this.bindOnlyWorldMatrix(world);
 
+            let mustRebind = this._mustRebind(scene, effect, mesh.visibility);
+            
             // Bones
             MaterialHelper.BindBonesParameters(mesh, effect);
-            if (this._mustRebind(scene, effect, mesh.visibility)) {
+            
+            if (mustRebind) {
                 this._uniformBuffer.bindToEffect(effect, "Material");
                 
                 this.bindViewProjection(effect);
@@ -1024,6 +1037,12 @@ module BABYLON {
                         if (this._bumpTexture && scene.getEngine().getCaps().standardDerivatives && StandardMaterial.BumpTextureEnabled) {
                             this._uniformBuffer.updateFloat3("vBumpInfos", this._bumpTexture.coordinatesIndex, 1.0 / this._bumpTexture.level, this.parallaxScaleBias);
                             MaterialHelper.BindTextureMatrix(this._bumpTexture, this._uniformBuffer, "bump");
+
+                            if (scene._mirroredCameraPosition) {
+                                this._uniformBuffer.updateFloat4("vNormalReoderParams", this.invertNormalMapX ? 0 : 1.0, this.invertNormalMapX ? 1.0 : -1.0, this.invertNormalMapY ? 0 : 1.0, this.invertNormalMapY ? 1.0 : -1.0);
+                            } else {
+                                this._uniformBuffer.updateFloat4("vNormalReoderParams", this.invertNormalMapX ? 1.0 : 0, this.invertNormalMapX ? -1.0 : 1.0, this.invertNormalMapY ? 1.0 : 0, this.invertNormalMapY ? -1.0 : 1.0);
+                            }                           
                         }
 
                         if (this._refractionTexture && StandardMaterial.RefractionTextureEnabled) {
@@ -1107,11 +1126,11 @@ module BABYLON {
                 // Colors
                 scene.ambientColor.multiplyToRef(this.ambientColor, this._globalAmbientColor);
 
-                effect.setVector3("vEyePosition", scene._mirroredCameraPosition ? scene._mirroredCameraPosition : scene.activeCamera.position);
+                effect.setVector3("vEyePosition", scene._mirroredCameraPosition ? scene._mirroredCameraPosition : scene.activeCamera.globalPosition);
                 effect.setColor3("vAmbientColor", this._globalAmbientColor);
             }
 
-            if (this._mustRebind(scene, effect) || !this.isFrozen) {
+            if (mustRebind || !this.isFrozen) {
                 // Lights
                 if (scene.lightsEnabled && !this._disableLighting) {
                     MaterialHelper.BindLights(scene, mesh, effect, defines, this._maxSimultaneousLights);

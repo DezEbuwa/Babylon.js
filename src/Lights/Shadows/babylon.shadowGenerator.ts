@@ -14,6 +14,8 @@
 
         recreateShadowMap(): void;
 
+        forceCompilation(onCompiled: (generator: ShadowGenerator) => void, options?: { useInstances: boolean }): void;
+
         serialize(): any;
         dispose(): void;
     }
@@ -152,6 +154,10 @@
         }
 
         public set usePoissonSampling(value: boolean) {
+            if (!value && this.filter!== ShadowGenerator.FILTER_POISSONSAMPLING) {
+                return;
+            }    
+
             this.filter = (value ? ShadowGenerator.FILTER_POISSONSAMPLING : ShadowGenerator.FILTER_NONE);
         }
 
@@ -177,6 +183,9 @@
             return this.filter === ShadowGenerator.FILTER_EXPONENTIALSHADOWMAP;
         }
         public set useExponentialShadowMap(value: boolean) {
+            if (!value && this.filter!== ShadowGenerator.FILTER_EXPONENTIALSHADOWMAP) {
+                return;
+            }
             this.filter = (value ? ShadowGenerator.FILTER_EXPONENTIALSHADOWMAP : ShadowGenerator.FILTER_NONE);
         }
 
@@ -184,6 +193,9 @@
             return this.filter === ShadowGenerator.FILTER_BLUREXPONENTIALSHADOWMAP;
         }
         public set useBlurExponentialShadowMap(value: boolean) {
+            if (!value && this.filter!== ShadowGenerator.FILTER_BLUREXPONENTIALSHADOWMAP) {
+                return;
+            }            
             this.filter = (value ? ShadowGenerator.FILTER_BLUREXPONENTIALSHADOWMAP : ShadowGenerator.FILTER_NONE);
         }
 
@@ -191,6 +203,9 @@
             return this.filter === ShadowGenerator.FILTER_CLOSEEXPONENTIALSHADOWMAP;
         }
         public set useCloseExponentialShadowMap(value: boolean) {
+            if (!value && this.filter!== ShadowGenerator.FILTER_CLOSEEXPONENTIALSHADOWMAP) {
+                return;
+            }                   
             this.filter = (value ? ShadowGenerator.FILTER_CLOSEEXPONENTIALSHADOWMAP : ShadowGenerator.FILTER_NONE);
         }
 
@@ -198,6 +213,9 @@
             return this.filter === ShadowGenerator.FILTER_BLURCLOSEEXPONENTIALSHADOWMAP;
         }
         public set useBlurCloseExponentialShadowMap(value: boolean) {
+            if (!value && this.filter!== ShadowGenerator.FILTER_BLURCLOSEEXPONENTIALSHADOWMAP) {
+                return;
+            }                  
             this.filter = (value ? ShadowGenerator.FILTER_BLURCLOSEEXPONENTIALSHADOWMAP : ShadowGenerator.FILTER_NONE);
         }
 
@@ -250,6 +268,12 @@
 
             return this._shadowMap;
         }
+
+        /**
+		 * Controls the extent to which the shadows fade out at the edge of the frustum
+         * Used only by directionals and spots
+		 */
+        public frustumEdgeFalloff = 0;        
 
         private _light: IShadowLight;
         /**
@@ -343,6 +367,7 @@
             this._shadowMap.anisotropicFilteringLevel = 1;
             this._shadowMap.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
             this._shadowMap.renderParticles = false;
+            this._shadowMap.ignoreCameraViewport = true;
 
             // Record Face Index before render.
             this._shadowMap.onBeforeRenderObservable.add((faceIndex: number) => {
@@ -362,7 +387,7 @@
                     this._initializeBlurRTTAndPostProcesses();
                 }
 
-                this._scene.postProcessManager.directRender(this._blurPostProcesses, this.getShadowMapForRendering().getInternalTexture());
+                this._scene.postProcessManager.directRender(this._blurPostProcesses, this.getShadowMapForRendering().getInternalTexture(), true);
             });
 
             // Clear according to the chosen filter.
@@ -420,8 +445,18 @@
             }
         }
 
-        private _renderForShadowMap(opaqueSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>): void {
+        private _renderForShadowMap(opaqueSubMeshes: SmartArray<SubMesh>, alphaTestSubMeshes: SmartArray<SubMesh>, transparentSubMeshes: SmartArray<SubMesh>, depthOnlySubMeshes: SmartArray<SubMesh>): void {
             var index: number;
+            let engine = this._scene.getEngine();
+
+            if (depthOnlySubMeshes.length) {
+                engine.setColorWrite(false);            
+                for (index = 0; index < depthOnlySubMeshes.length; index++) {
+                    this._renderSubMeshForShadowMap(depthOnlySubMeshes.data[index]);
+                }
+                engine.setColorWrite(true);
+            }
+            
             for (index = 0; index < opaqueSubMeshes.length; index++) {
                 this._renderSubMeshForShadowMap(opaqueSubMeshes.data[index]);
             }
@@ -500,6 +535,43 @@
                 this._shadowMap.updateSamplingMode(Texture.NEAREST_SAMPLINGMODE);
             } else {
                 this._shadowMap.updateSamplingMode(Texture.BILINEAR_SAMPLINGMODE);
+            }
+        }
+
+        /**
+         * Force shader compilation including textures ready check
+         */
+        public forceCompilation(onCompiled: (generator: ShadowGenerator) => void, options?: { useInstances: boolean }): void {
+            var scene = this._scene;
+            var engine = scene.getEngine();
+            var subMeshes = new Array<SubMesh>();
+            var currentIndex = 0;
+
+            for(var mesh of this.getShadowMap().renderList) {
+                subMeshes.push(...mesh.subMeshes);
+            }
+
+            var checkReady = () => {
+                if (!this._scene || !this._scene.getEngine()) {
+                    return;
+                }
+
+                let subMesh = subMeshes[currentIndex];
+
+                if (this.isReady(subMesh, options ? options.useInstances : false)) {
+                    currentIndex++;
+                    if (currentIndex >= subMeshes.length) {
+                        if (onCompiled) {
+                            onCompiled(this);
+                        }
+                        return;
+                    }
+                }
+                setTimeout(checkReady, 16);
+            };
+
+            if (subMeshes.length > 0) {
+                checkReady();
             }
         }
 
@@ -620,7 +692,7 @@
                 effect.setMatrix("lightMatrix" + lightIndex, this.getTransformMatrix());
             } 
             effect.setTexture("shadowSampler" + lightIndex, this.getShadowMapForRendering());
-            light._uniformBuffer.updateFloat3("shadowsInfo", this.getDarkness(), this.blurScale / this.getShadowMap().getSize().width, this.depthScale, lightIndex);
+            light._uniformBuffer.updateFloat4("shadowsInfo", this.getDarkness(), this.blurScale / this.getShadowMap().getSize().width, this.depthScale, this.frustumEdgeFalloff, lightIndex);
             light._uniformBuffer.updateFloat2("depthValues", this.getLight().getDepthMinZ(scene.activeCamera), this.getLight().getDepthMinZ(scene.activeCamera) + this.getLight().getDepthMaxZ(scene.activeCamera), lightIndex);
         }
 

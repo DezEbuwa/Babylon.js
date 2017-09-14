@@ -5,6 +5,7 @@ module BABYLON {
         public DIFFUSE = false;
         public CLIPPLANE = false;
         public ALPHATEST = false;
+        public DEPTHPREPASS = false;
         public POINTSIZE = false;
         public FOG = false;
         public LIGHT0 = false;
@@ -380,6 +381,10 @@ module BABYLON {
             var serializationObject = SerializationHelper.Serialize(this);
             serializationObject.customType = "BABYLON.LavaMaterial";
             return serializationObject;
+        }
+
+        public getClassName(): string {
+            return "LavaMaterial";
         }
 
         // Statics

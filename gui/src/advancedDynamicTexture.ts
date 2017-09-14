@@ -1,15 +1,23 @@
 /// <reference path="../../dist/preview release/babylon.d.ts"/>
 
 module BABYLON.GUI {
+    export interface IFocusableControl {
+        onFocus(): void;
+        onBlur(): void;
+        processKeyboard(evt: KeyboardEvent): void;
+    }
+
     export class AdvancedDynamicTexture extends DynamicTexture {
         private _isDirty = false;
         private _renderObserver: Observer<Camera>;
         private _resizeObserver: Observer<Engine>;
+        private _preKeyboardObserver: Observer<KeyboardInfoPre>;
         private _pointerMoveObserver: Observer<PointerInfoPre>;
         private _pointerObserver: Observer<PointerInfo>;
-        private _canvasBlurObserver: Observer<Engine>;
+        private _canvasPointerOutObserver: Observer<Engine>;
         private _background: string;
         public _rootContainer = new Container("root");
+        public _lastPickedControl: Control;
         public _lastControlOver: Control;
         public _lastControlDown: Control;
         public _capturingControl: Control;
@@ -21,6 +29,7 @@ module BABYLON.GUI {
         private _idealWidth = 0;
         private _idealHeight = 0;
         private _renderAtIdealSize = false;
+        private _focusedControl: IFocusableControl;
 
         public get background(): string {
             return this._background;
@@ -79,11 +88,44 @@ module BABYLON.GUI {
         public get layer(): Layer {
             return this._layerToDispose;
         }   
+
+        public get rootContainer(): Container {
+            return this._rootContainer;
+        }
+
+        public get focusedControl(): IFocusableControl {
+            return this._focusedControl;
+        }
+
+        public set focusedControl(control: IFocusableControl) {
+            if (this._focusedControl == control) {
+                return;
+            }
+
+            if (!this._focusedControl) {
+                control.onFocus();
+            } else {
+                this._focusedControl.onBlur();
+            }
+
+            this._focusedControl = control;
+        }
        
         constructor(name: string, width = 0, height = 0, scene: Scene, generateMipMaps = false, samplingMode = Texture.NEAREST_SAMPLINGMODE) {
             super(name, {width: width, height: height}, scene, generateMipMaps, samplingMode, Engine.TEXTUREFORMAT_RGBA);
 
             this._renderObserver = this.getScene().onBeforeCameraRenderObservable.add((camera: Camera) => this._checkUpdate(camera));
+            this._preKeyboardObserver = this.getScene().onPreKeyboardObservable.add(info => {
+                if (!this._focusedControl) {
+                    return;
+                }
+
+                if (info.type === KeyboardEventTypes.KEYDOWN) {
+                    this._focusedControl.processKeyboard(info.event);
+                }
+
+                info.skipOnPointerObservable = true;
+            });
 
             this._rootContainer._link(null, this);
 
@@ -141,8 +183,8 @@ module BABYLON.GUI {
                 this.getScene().onPointerObservable.remove(this._pointerObserver);
             }
 
-            if (this._canvasBlurObserver) {
-                this.getScene().getEngine().onCanvasBlurObservable.remove(this._canvasBlurObserver);
+            if (this._canvasPointerOutObserver) {
+                this.getScene().getEngine().onCanvasPointerOutObservable.remove(this._canvasPointerOutObserver);
             }
 
             if (this._layerToDispose) {
@@ -150,6 +192,8 @@ module BABYLON.GUI {
                 this._layerToDispose.dispose();
                 this._layerToDispose = null;
             }
+
+            this._rootContainer.dispose();
 
             super.dispose();
         }
@@ -204,15 +248,23 @@ module BABYLON.GUI {
                     }
 
                     var mesh = control._linkedMesh;
+
+                    if (!mesh || mesh.isDisposed()) {
+                        Tools.SetImmediate(()=>{
+                            control.linkWithMesh(null);
+                        });
+                        
+                        continue;
+                    }
                     
                     var position = mesh.getBoundingInfo().boundingSphere.center;
                     var projectedPosition = Vector3.Project(position, mesh.getWorldMatrix(), scene.getTransformMatrix(), globalViewport);
 
                     if (projectedPosition.z < 0 || projectedPosition.z > 1) {
-                        control.isVisible = false;
+                        control.notRenderable = true;
                         continue;
                     }
-                    control.isVisible = true;
+                    control.notRenderable = false;
                     control._moveToProjectedPosition(projectedPosition);
                 }
             }
@@ -244,12 +296,14 @@ module BABYLON.GUI {
 
             // Render
             context.font = "18px Arial";
+            context.strokeStyle = "white";
             var measure = new Measure(0, 0, renderWidth, renderHeight);
             this._rootContainer._draw(measure, context);
         }
 
         private _doPicking(x: number, y: number, type: number): void {
-            var engine = this.getScene().getEngine();
+            var scene = this.getScene();
+            var engine = scene.getEngine();
             var textureSize = this.getSize();
 
             if (this._isFullscreen) {
@@ -265,13 +319,15 @@ module BABYLON.GUI {
             if (!this._rootContainer._processPicking(x, y, type)) {
 
                 if (type === BABYLON.PointerEventTypes.POINTERMOVE) {
-                    if (this._lastControlOver && this._lastControlOver.onPointerOutObservable.hasObservers()) {
-                        this._lastControlOver.onPointerOutObservable.notifyObservers(this._lastControlOver);
+                    if (this._lastControlOver) {
+                        this._lastControlOver._onPointerOut();
                     }
                     
                     this._lastControlOver = null;
                 }
             }
+
+            this._manageFocus();
         }
 
         public attach(): void {
@@ -283,19 +339,27 @@ module BABYLON.GUI {
                     return;
                 }
 
+                let camera = scene.cameraToUseForPointers || scene.activeCamera;
+                let engine = scene.getEngine();
+                let viewport = camera.viewport;
+                let x = (scene.pointerX / engine.getHardwareScalingLevel() - viewport.x * engine.getRenderWidth()) / viewport.width;
+                let y = (scene.pointerY / engine.getHardwareScalingLevel() - viewport.y * engine.getRenderHeight()) / viewport.height;
+
                 this._shouldBlockPointer = false;
-                this._doPicking(scene.pointerX, scene.pointerY, pi.type);
+                this._doPicking(x, y, pi.type);
 
                 pi.skipOnPointerObservable = this._shouldBlockPointer && pi.type !== BABYLON.PointerEventTypes.POINTERUP;
             });
 
-            this._attachToOnBlur(scene);
+            this._attachToOnPointerOut(scene);
         }
 
-        public attachToMesh(mesh: AbstractMesh): void {
+        public attachToMesh(mesh: AbstractMesh, supportPointerMove = true): void {
             var scene = this.getScene();
             this._pointerObserver = scene.onPointerObservable.add((pi, state) => {
-                if (pi.type !== BABYLON.PointerEventTypes.POINTERUP && pi.type !== BABYLON.PointerEventTypes.POINTERDOWN) {
+                if (pi.type !== BABYLON.PointerEventTypes.POINTERMOVE 
+                    && pi.type !== BABYLON.PointerEventTypes.POINTERUP
+                    && pi.type !== BABYLON.PointerEventTypes.POINTERDOWN) {
                     return;
                 }
 
@@ -308,17 +372,38 @@ module BABYLON.GUI {
                         this._lastControlDown.forcePointerUp();
                     }
                     this._lastControlDown = null;  
+
+                    this.focusedControl = null;
+                } else if (pi.type === BABYLON.PointerEventTypes.POINTERMOVE) {
+                    if (this._lastControlOver) {
+                        this._lastControlOver._onPointerOut();
+                    }              
+                    this._lastControlOver = null;
                 }
             });
 
-            this._attachToOnBlur(scene);
+            mesh.enablePointerMoveEvents = supportPointerMove;
+            this._attachToOnPointerOut(scene);
         }
 
-        private _attachToOnBlur(scene: Scene): void {
-            this._canvasBlurObserver = scene.getEngine().onCanvasBlurObservable.add(() => {
-                if (this._lastControlOver && this._lastControlOver.onPointerOutObservable.hasObservers()) {
-                    this._lastControlOver.onPointerOutObservable.notifyObservers(this._lastControlOver);
-                }                
+        private _manageFocus(): void {
+            // Focus management
+            if (this._focusedControl) {
+                if (this._focusedControl !== (<any>this._lastPickedControl)) {
+                    if (this._lastPickedControl.isFocusInvisible) {
+                        return;
+                    }
+
+                    this.focusedControl = null;
+                }
+            }
+        }
+
+        private _attachToOnPointerOut(scene: Scene): void {
+            this._canvasPointerOutObserver = scene.getEngine().onCanvasPointerOutObservable.add(() => {
+                if (this._lastControlOver) {
+                    this._lastControlOver._onPointerOut();
+                }            
                 this._lastControlOver = null;
 
                 if (this._lastControlDown) {
@@ -329,7 +414,7 @@ module BABYLON.GUI {
         }
 
         // Statics
-        public static CreateForMesh(mesh: AbstractMesh, width = 1024, height = 1024): AdvancedDynamicTexture {
+        public static CreateForMesh(mesh: AbstractMesh, width = 1024, height = 1024, supportPointerMove = true): AdvancedDynamicTexture {
             var result = new AdvancedDynamicTexture(mesh.name + " AdvancedDynamicTexture", width, height, mesh.getScene(), true, Texture.TRILINEAR_SAMPLINGMODE);
 
             var material = new BABYLON.StandardMaterial("AdvancedDynamicTextureMaterial", mesh.getScene());
@@ -341,7 +426,7 @@ module BABYLON.GUI {
 
             mesh.material = material;
 
-            result.attachToMesh(mesh);
+            result.attachToMesh(mesh, supportPointerMove);
 
             return result;
         }

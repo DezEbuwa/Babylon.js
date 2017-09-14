@@ -315,22 +315,24 @@
          * @param func - the function to be called
          * @param requester - the object that will request the next frame. Falls back to window.
          */
-        public static QueueNewFrame(func, requester: any = window): void {
-            //if WebVR is enabled AND presenting, requestAnimationFrame is triggered when enabled.
-            /*if(requester.isPresenting) {
-                return;
-            } else*/ if (requester.requestAnimationFrame)
-                requester.requestAnimationFrame(func);
-            else if (requester.msRequestAnimationFrame)
-                requester.msRequestAnimationFrame(func);
-            else if (requester.webkitRequestAnimationFrame)
-                requester.webkitRequestAnimationFrame(func);
-            else if (requester.mozRequestAnimationFrame)
-                requester.mozRequestAnimationFrame(func);
-            else if (requester.oRequestAnimationFrame)
-                requester.oRequestAnimationFrame(func);
+        public static QueueNewFrame(func, requester: any = window): number {
+            if (requester.requestAnimationFrame) {
+                return requester.requestAnimationFrame(func);
+            }
+            else if (requester.msRequestAnimationFrame) {
+                return requester.msRequestAnimationFrame(func);
+            }
+            else if (requester.webkitRequestAnimationFrame) {
+                return requester.webkitRequestAnimationFrame(func);
+            }
+            else if (requester.mozRequestAnimationFrame) {
+                return requester.mozRequestAnimationFrame(func);
+            }
+            else if (requester.oRequestAnimationFrame) {
+                return requester.oRequestAnimationFrame(func);
+            }
             else {
-                window.setTimeout(func, 16);
+                return window.setTimeout(func, 16);
             }
         }
 
@@ -378,12 +380,18 @@
             return url;
         }
 
+        public static PreprocessUrl = (url: string) => {
+            return url;
+        }
+
         public static LoadImage(url: any, onload, onerror, database): HTMLImageElement {
             if (url instanceof ArrayBuffer) {
                 url = Tools.EncodeArrayBufferTobase64(url);
             }
 
             url = Tools.CleanUrl(url);
+
+            url = Tools.PreprocessUrl(url);
 
             var img = new Image();
 
@@ -424,7 +432,7 @@
                     noIndexedDB();
                 }
                 else {
-                    var textureName = url.substring(5).toLowerCase();
+                    var textureName = decodeURIComponent(url.substring(5).toLowerCase());
                     if (FilesInput.FilesToLoad[textureName]) {
                         try {
                             var blobURL;
@@ -454,6 +462,8 @@
         //ANY
         public static LoadFile(url: string, callback: (data: any) => void, progressCallBack?: (data: any) => void, database?, useArrayBuffer?: boolean, onError?: (request: XMLHttpRequest) => void): void {
             url = Tools.CleanUrl(url);
+
+            url = Tools.PreprocessUrl(url);
 
             var noIndexedDB = () => {
                 var request = new XMLHttpRequest();
@@ -492,7 +502,7 @@
             };
 
             if (url.indexOf("file:") !== -1) {
-                var fileName = url.substring(5).toLowerCase();
+                var fileName = decodeURIComponent(url.substring(5).toLowerCase());
                 if (FilesInput.FilesToLoad[fileName]) {
                     Tools.ReadFile(FilesInput.FilesToLoad[fileName], callback, progressCallBack, useArrayBuffer);
                 }
@@ -849,7 +859,7 @@
 
             //At this point size can be a number, or an object (according to engine.prototype.createRenderTargetTexture method)
             var texture = new RenderTargetTexture("screenShot", size, scene, false, false, Engine.TEXTURETYPE_UNSIGNED_INT, false, Texture.NEAREST_SAMPLINGMODE);
-            texture.renderList = scene.meshes;
+            texture.renderList = null;
             texture.samples = samples;
 
             texture.onAfterRenderObservable.add(() => {
@@ -1137,7 +1147,7 @@
          * @param object the object to get the class name from
          * @return the name of the class, will be "object" for a custom data type not using the @className decorator
          */
-        public static getClassName(object, isType: boolean = false): string {
+        public static GetClassName(object, isType: boolean = false): string {
             let name = null;
 
             if (!isType && object.getClassName) {

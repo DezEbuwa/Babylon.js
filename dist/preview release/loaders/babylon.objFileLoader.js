@@ -76,6 +76,11 @@ var BABYLON;
                         //Set the color into the material
                         material.specularColor = BABYLON.Color3.FromArray(color);
                     }
+                    else if (key === "ke") {
+                        // Emissive color using RGB values
+                        color = value.split(delimiter_pattern, 3);
+                        material.emissiveColor = BABYLON.Color3.FromArray(color);
+                    }
                     else if (key === "ns") {
                         //value = "Integer"
                         material.specularPower = value;
@@ -173,6 +178,9 @@ var BABYLON;
          * @return The Texture
          */
         MTLFileLoader._getTexture = function (rootUrl, value, scene) {
+            if (!value) {
+                return null;
+            }
             var url = rootUrl;
             // Load from input file.
             if (rootUrl === "file:") {
@@ -197,6 +205,7 @@ var BABYLON;
     BABYLON.MTLFileLoader = MTLFileLoader;
     var OBJFileLoader = (function () {
         function OBJFileLoader() {
+            this.name = "obj";
             this.extensions = ".obj";
             this.obj = /^o/;
             this.group = /^g/;
@@ -765,9 +774,9 @@ var BABYLON;
             //Return an array with all BABYLON.Mesh
             return babylonMeshesArray;
         };
+        OBJFileLoader.OPTIMIZE_WITH_UV = false;
         return OBJFileLoader;
     }());
-    OBJFileLoader.OPTIMIZE_WITH_UV = false;
     BABYLON.OBJFileLoader = OBJFileLoader;
     if (BABYLON.SceneLoader) {
         //Add this loader into the register plugin

@@ -3,7 +3,7 @@ module BABYLON {
 
     export interface ICameraInput<TCamera extends BABYLON.Camera> {
         camera: TCamera;
-        getTypeName(): string;
+        getClassName(): string;
         getSimpleName(): string;
         attachControl: (element: HTMLElement, noPreventDefault?: boolean) => void;
         detachControl: (element: HTMLElement) => void;
@@ -55,6 +55,7 @@ module BABYLON {
                 var input = this.attached[cam];
                 if (input === inputToRemove) {
                     input.detachControl(this.attachedElement);
+                    input.camera = null;
                     delete this.attached[cam];
                     this.rebuildInputCheck();
                 }
@@ -64,8 +65,9 @@ module BABYLON {
         public removeByType(inputType: string) {
             for (var cam in this.attached) {
                 var input = this.attached[cam];
-                if (input.getTypeName() === inputType) {
+                if (input.getClassName() === inputType) {
                     input.detachControl(this.attachedElement);
+                    input.camera = null;
                     delete this.attached[cam];
                     this.rebuildInputCheck();
                 }
@@ -99,7 +101,7 @@ module BABYLON {
             }
         }
 
-        public detachElement(element: HTMLElement) {
+        public detachElement(element: HTMLElement, disconnect = false) {
             if (this.attachedElement !== element) {
                 return;
             }
@@ -107,6 +109,10 @@ module BABYLON {
             for (var cam in this.attached) {
                 var input = this.attached[cam];
                 this.attached[cam].detachControl(element);
+
+                if (disconnect) {
+                    this.attached[cam].camera = null;
+                }
             }
 
             this.attachedElement = null;
@@ -125,7 +131,7 @@ module BABYLON {
 
         public clear() {
             if (this.attachedElement) {
-                this.detachElement(this.attachedElement);
+                this.detachElement(this.attachedElement, true);
             }
             this.attached = {};
             this.attachedElement = null;
@@ -137,7 +143,7 @@ module BABYLON {
             for (var cam in this.attached) {
                 var input = this.attached[cam];
                 var res = SerializationHelper.Serialize(input);
-                inputs[input.getTypeName()] = res;
+                inputs[input.getClassName()] = res;
             }
 
             serializedCamera.inputsmgr = inputs;
@@ -159,7 +165,7 @@ module BABYLON {
             } else { 
                 //2016-03-08 this part is for managing backward compatibility
                 for (var n in this.attached) {
-                    var construct = CameraInputTypes[this.attached[n].getTypeName()];
+                    var construct = CameraInputTypes[this.attached[n].getClassName()];
                     if (construct) {
                         var input = SerializationHelper.Parse(() => { return new construct() }, parsedCamera, null);
                         this.remove(this.attached[n]);

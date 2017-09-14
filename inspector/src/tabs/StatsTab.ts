@@ -157,6 +157,12 @@ module INSPECTOR {
                     elem:elemValue, 
                     updateFct:() => { return BABYLON.Tools.Format(this._scene.getLastFrameDuration())}
                 });
+                elemLabel = this._createStatLabel("Inter-frame", this._panel);
+                elemValue = Helpers.CreateDiv('stat-value', this._panel);
+                this._updatableProperties.push({ 
+                    elem:elemValue, 
+                    updateFct:() => { return BABYLON.Tools.Format(this._scene.getInterFramePerfCounter())}
+                });                
                 elemLabel = this._createStatLabel("Potential FPS", this._panel);
                 elemValue = Helpers.CreateDiv('stat-value', this._panel);
                 this._updatableProperties.push({ 
@@ -267,11 +273,8 @@ module INSPECTOR {
                     updateFct:() => { return "WebGL v" + this._engine.webGLVersion + " - " + this._glInfo.version + " - "+this._glInfo.renderer}
                 });
             }
-
-
-            // Register the update loop
-            this._scene.registerAfterRender(this._updateLoopHandler);
         }
+        
         private _createStatLabel(content:string, parent: HTMLElement) : HTMLElement {
             let elem = Helpers.CreateDiv('stat-label', parent);
             elem.textContent = content;
@@ -287,6 +290,13 @@ module INSPECTOR {
 
         public dispose() {
             this._scene.unregisterAfterRender(this._updateLoopHandler);
+        }
+
+        public active(b: boolean){
+            super.active(b);
+            if(b){
+                this._scene.registerAfterRender(this._updateLoopHandler);
+            }
         }
     }
 }

@@ -8,6 +8,10 @@
         private _mesh: AbstractMesh;
         private _meshRank: number;
 
+        public unBindMesh() {
+            this._mesh = null;
+        }
+
         public addFallback(rank: number, define: string): void {
             if (!this._defines[rank]) {
                 if (rank < this._currentRank) {
@@ -108,9 +112,11 @@
         public _key: string;
         private _indexParameters: any;
         private _fallbacks: EffectFallbacks;
+        private _vertexSourceCode: string;
+        private _fragmentSourceCode: string;
 
         private _program: WebGLProgram;
-        private _valueCache: { [key: string]: any } = {};
+        private _valueCache: { [key: string]: any };
         private static _baseCache: { [key: number]: WebGLBuffer } = {};
 
         constructor(baseName: any, attributesNamesOrOptions: string[] | EffectCreationOptions, uniformsNamesOrEngine: string[] | Engine, samplers?: string[], engine?: Engine, defines?: string, fallbacks?: EffectFallbacks, onCompiled?: (effect: Effect) => void, onError?: (effect: Effect, errors: string) => void, indexParameters?: any) {
@@ -179,7 +185,14 @@
                         this._loadFragmentShader(fragmentSource, (fragmentCode) => {
                             this._processIncludes(fragmentCode, fragmentCodeWithIncludes => {
                                 this._processShaderConversion(fragmentCodeWithIncludes, true, migratedFragmentCode => {
-                                    this._prepareEffect(migratedVertexCode, migratedFragmentCode, this._attributesNames, this.defines, this._fallbacks);
+                                    if (baseName) {
+                                        this._vertexSourceCode = "#define SHADER_NAME vertex:" + baseName + "\n" + migratedVertexCode;
+                                        this._fragmentSourceCode = "#define SHADER_NAME fragment:" + baseName + "\n" + migratedFragmentCode;
+                                    } else {
+                                        this._vertexSourceCode = migratedVertexCode;
+                                        this._fragmentSourceCode = migratedFragmentCode;
+                                    }
+                                    this._prepareEffect();
                                 });
                             });
                         });
@@ -239,14 +252,6 @@
             return this._compilationError;
         }
 
-        public getVertexShaderSource(): string {
-            return this._evaluateDefinesOnString(this._engine.getVertexShaderSource(this._program));
-        }
-
-        public getFragmentShaderSource(): string {
-            return this._evaluateDefinesOnString(this._engine.getFragmentShaderSource(this._program));
-        }
-
         // Methods
         public executeWhenCompiled(func: (effect: Effect) => void): void {
             if (this.isReady()) {
@@ -254,8 +259,7 @@
                 return;
             }
             
-            var observer = this.onCompileObservable.add((effect) => {
-                this.onCompileObservable.remove(observer);
+            this.onCompileObservable.add((effect) => {
                 func(effect);
             });
         }
@@ -374,12 +378,15 @@
                 callback(preparedSourceCode.replace("#version 300 es", ""));
                 return;
             }
+
+            var hasDrawBuffersExtension = preparedSourceCode.search(/#extension.+GL_EXT_draw_buffers.+require/) !== -1;
             
             // Remove extensions 
             // #extension GL_OES_standard_derivatives : enable
             // #extension GL_EXT_shader_texture_lod : enable
             // #extension GL_EXT_frag_depth : enable
-            var regex = /#extension.+(GL_OES_standard_derivatives|GL_EXT_shader_texture_lod|GL_EXT_frag_depth).+enable/g;
+            // #extension GL_EXT_draw_buffers : require
+            var regex = /#extension.+(GL_OES_standard_derivatives|GL_EXT_shader_texture_lod|GL_EXT_frag_depth|GL_EXT_draw_buffers).+(enable|require)/g;
             var result = preparedSourceCode.replace(regex, "");
 
             // Migrate to GLSL v300
@@ -394,7 +401,8 @@
                 result = result.replace(/textureCube\(/g, "texture(");
                 result = result.replace(/gl_FragDepthEXT/g, "gl_FragDepth");
                 result = result.replace(/gl_FragColor/g, "glFragColor");
-                result = result.replace(/void\s+?main\(/g, "out vec4 glFragColor;\nvoid main(");
+                result = result.replace(/gl_FragData/g, "glFragData");
+                result = result.replace(/void\s+?main\(/g, (hasDrawBuffersExtension ? "" : "out vec4 glFragColor;\n") + "void main(");
             }
             
             callback(result);
@@ -412,7 +420,7 @@
                 // Uniform declaration
                 if (includeFile.indexOf("__decl__") !== -1) {
                     includeFile = includeFile.replace(/__decl__/, "");
-                    if (this._engine.webGLVersion != 1) {
+                    if (this._engine.supportsUniformBuffers) {
                         includeFile = includeFile.replace(/Vertex/, "Ubo");
                         includeFile = includeFile.replace(/Fragment/, "Ubo");
                     }
@@ -448,7 +456,7 @@
                             }
 
                             for (var i = minIndex; i < maxIndex; i++) {
-                                if (this._engine.webGLVersion === 1) {
+                                if (!this._engine.supportsUniformBuffers) {
                                     // Ubo replacement
                                     sourceIncludeContent = sourceIncludeContent.replace(/light\{X\}.(\w*)/g, (str: string, p1: string) => {
                                         return p1 + "{X}";
@@ -457,7 +465,7 @@
                                 includeContent += sourceIncludeContent.replace(/\{X\}/g, i) + "\n";
                             }
                         } else {
-                            if (this._engine.webGLVersion === 1) {
+                            if (!this._engine.supportsUniformBuffers) {
                                 // Ubo replacement
                                 includeContent = includeContent.replace(/light\{X\}.(\w*)/g, (str: string, p1: string) => {
                                     return p1 + "{X}";
@@ -501,11 +509,15 @@
             return source;
         }
 
-        private _prepareEffect(vertexSourceCode: string, fragmentSourceCode: string, attributesNames: string[], defines: string, fallbacks?: EffectFallbacks): void {
+        public _prepareEffect() {
+            let attributesNames = this._attributesNames;
+            let defines = this.defines;
+            let fallbacks = this._fallbacks;
+            this._valueCache = {};
+
             try {
                 var engine = this._engine;
-
-                this._program = engine.createShaderProgram(vertexSourceCode, fragmentSourceCode, defines);
+                this._program = engine.createShaderProgram(this._vertexSourceCode, this._fragmentSourceCode, defines);
 
                 if (engine.webGLVersion > 1) {
                     for (var name in this._uniformBuffersNames) {
@@ -534,6 +546,12 @@
                     this.onCompiled(this);
                 }
                 this.onCompileObservable.notifyObservers(this);
+                this.onCompileObservable.clear();
+
+                // Unbind mesh reference in fallbacks
+                if (this._fallbacks) {
+                    this._fallbacks.unBindMesh();
+                }
             } catch (e) {
                 this._compilationError = e.message;
 
@@ -545,28 +563,34 @@
                 BABYLON.Tools.Error("Attributes: " + attributesNames.map(function(attribute) {
                     return " " + attribute;
                 }));
-                this._dumpShadersSource(vertexSourceCode, fragmentSourceCode, defines);
+                this._dumpShadersSource(this._vertexSourceCode, this._fragmentSourceCode, defines);
                 Tools.Error("Error: " + this._compilationError);
 
                 if (fallbacks && fallbacks.isMoreFallbacks) {
                     Tools.Error("Trying next fallback.");
-                    defines = fallbacks.reduce(defines);
-                    this._prepareEffect(vertexSourceCode, fragmentSourceCode, attributesNames, defines, fallbacks);
+                    this.defines = fallbacks.reduce(this.defines);
+                    this._prepareEffect();
                 } else { // Sorry we did everything we can
 
                     if (this.onError) {
                         this.onError(this, this._compilationError);
                     }
                     this.onErrorObservable.notifyObservers(this);
+                    this.onErrorObservable.clear();
+
+                    // Unbind mesh reference in fallbacks
+                    if (this._fallbacks) {
+                        this._fallbacks.unBindMesh();
+                    }
                 }
-            }
+            }            
         }
 
         public get isSupported(): boolean {
             return this._compilationError === "";
         }
 
-        public _bindTexture(channel: string, texture: WebGLTexture): void {
+        public _bindTexture(channel: string, texture: InternalTexture): void {
             this._engine._bindTexture(this._samplers.indexOf(channel), texture);
         }
 
@@ -885,134 +909,12 @@
             return this;
         }
 
-        private _recombineShader(node: any): string {
-            if (node.define) {
-                if (node.condition) {
-                    var defineIndex = this.defines.indexOf("#define " + node.define);
-                    if (defineIndex === -1) {
-                        return null;
-                    }
-
-                    var nextComma = this.defines.indexOf("\n", defineIndex);
-                    var defineValue = this.defines.substr(defineIndex + 7, nextComma - defineIndex - 7).replace(node.define, "").trim();
-                    var condition = defineValue + node.condition;
-                    if (!eval(condition)) {
-                        return null;
-                    }
-                }
-                else if (node.ndef) {
-                    if (this.defines.indexOf("#define " + node.define) !== -1) {
-                        return null;
-                    }
-                }
-                else if (this.defines.indexOf("#define " + node.define) === -1) {
-                    return null;
-                }
-            }
-
-            var result = "";
-            for (var index = 0; index < node.children.length; index++) {
-                var line = node.children[index];
-
-                if (line.children) {
-                    var combined = this._recombineShader(line);
-                    if (combined !== null) {
-                        result += combined + "\r\n";
-                    }
-
-                    continue;
-                }
-
-                if (line.length > 0) {
-                    result += line + "\r\n";
-                }
-            }
-
-            return result;
-        }
-
-        private _evaluateDefinesOnString(shaderString: string): string {
-            var root = <any>{
-                children: []
-            };
-            var currentNode = root;
-
-            var lines = shaderString.split("\n");
-
-            for (var index = 0; index < lines.length; index++) {
-                var line = lines[index].trim();
-
-                // #ifdef
-                var pos = line.indexOf("#ifdef ");
-                if (pos !== -1) {
-                    var define = line.substr(pos + 7);
-
-                    var newNode = {
-                        condition: null,
-                        ndef: false,
-                        define: define,
-                        children: [],
-                        parent: currentNode
-                    }
-                    
-                    currentNode.children.push(newNode);
-                    currentNode = newNode;
-                    continue;
-                }
-
-                // #ifndef
-                var pos = line.indexOf("#ifndef ");
-                if (pos !== -1) {
-                    var define = line.substr(pos + 8);
-
-                    newNode = {
-                        condition: null,
-                        define: define,
-                        ndef: true,
-                        children: [],
-                        parent: currentNode
-                    }
-                    
-                    currentNode.children.push(newNode);
-                    currentNode = newNode;
-                    continue;
-                }
-
-                // #if
-                var pos = line.indexOf("#if ");
-                if (pos !== -1) {
-                    var define = line.substr(pos + 4).trim();
-                    var conditionPos = define.indexOf(" ");
-
-                    newNode = {
-                        condition: define.substr(conditionPos + 1),
-                        define: define.substr(0, conditionPos),
-                        ndef: false,
-                        children: [],
-                        parent: currentNode
-                    }
-                    
-                    currentNode.children.push(newNode);
-                    currentNode = newNode;
-                    continue;
-                }
-
-                // #endif
-                pos = line.indexOf("#endif");
-                if (pos !== -1) {
-                    currentNode = currentNode.parent;
-                    continue;
-                }
-
-                currentNode.children.push(line);
-            }
-
-            // Recombine
-            return this._recombineShader(root);
-        }
-
         // Statics
         public static ShadersStore = {};
         public static IncludesShadersStore = {};
+
+        public static ResetCache() {
+            Effect._baseCache = {};
+        }
     }
 } 

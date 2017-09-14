@@ -15,10 +15,10 @@
         public get doubleClick(): boolean {
             return this._doubleClick;
         }
-        public get hasSwiped(): boolean{
+        public get hasSwiped(): boolean {
             return this._hasSwiped;
         }
-        public get ignore(): boolean{
+        public get ignore(): boolean {
             return this._ignore;
         }
 
@@ -33,75 +33,6 @@
         }
         public set ignore(b: boolean) {
             this._ignore = b;
-        }
-    }
-
-    export class PointerEventTypes {
-        static _POINTERDOWN = 0x01;
-        static _POINTERUP = 0x02;
-        static _POINTERMOVE = 0x04;
-        static _POINTERWHEEL = 0x08;
-        static _POINTERPICK = 0x10;
-        static _POINTERTAP = 0x20;
-        static _POINTERDOUBLETAP = 0x40;
-
-        public static get POINTERDOWN(): number {
-            return PointerEventTypes._POINTERDOWN;
-        }
-
-        public static get POINTERUP(): number {
-            return PointerEventTypes._POINTERUP;
-        }
-
-        public static get POINTERMOVE(): number {
-            return PointerEventTypes._POINTERMOVE;
-        }
-
-        public static get POINTERWHEEL(): number {
-            return PointerEventTypes._POINTERWHEEL;
-        }
-
-        public static get POINTERPICK(): number {
-            return PointerEventTypes._POINTERPICK;
-        }
-        
-        public static get POINTERTAP(): number {
-            return PointerEventTypes._POINTERTAP;
-        }
-
-        public static get POINTERDOUBLETAP(): number {
-            return PointerEventTypes._POINTERDOUBLETAP;
-        }
-    }
-
-    export class PointerInfoBase {
-        constructor(public type: number, public event: PointerEvent | MouseWheelEvent) {
-        }
-
-    }
-
-    /**
-     * This class is used to store pointer related info for the onPrePointerObservable event.
-     * Set the skipOnPointerObservable property to true if you want the engine to stop any process after this event is triggered, even not calling onPointerObservable
-     */
-    export class PointerInfoPre extends PointerInfoBase {
-        constructor(type: number, event: PointerEvent | MouseWheelEvent, localX, localY) {
-            super(type, event);
-            this.skipOnPointerObservable = false;
-            this.localPosition = new Vector2(localX, localY);
-        }
-
-        public localPosition: Vector2;
-        public skipOnPointerObservable: boolean;
-    }
-
-    /**
-     * This type contains all the data related to a pointer event in Babylon.js.
-     * The event member is an instance of PointerEvent for all types except PointerWheel and is of type MouseWheelEvent when type equals PointerWheel. The different event types can be found in the PointerEventTypes class.
-     */
-    export class PointerInfo extends PointerInfoBase {
-        constructor(type: number, event: PointerEvent | MouseWheelEvent, public pickInfo: PickingInfo) {
-            super(type, event);
         }
     }
 
@@ -168,18 +99,22 @@
         public static MinDeltaTime = 1.0;
         public static MaxDeltaTime = 1000.0;
 
+        /** The fog is deactivated */
         public static get FOGMODE_NONE(): number {
             return Scene._FOGMODE_NONE;
         }
 
+        /** The fog density is following an exponential function */
         public static get FOGMODE_EXP(): number {
             return Scene._FOGMODE_EXP;
         }
 
+        /** The fog density is following an exponential function faster than FOGMODE_EXP */
         public static get FOGMODE_EXP2(): number {
             return Scene._FOGMODE_EXP2;
         }
 
+        /** The fog density is following a linear function. */
         public static get FOGMODE_LINEAR(): number {
             return Scene._FOGMODE_LINEAR;
         }
@@ -217,7 +152,7 @@
          * Forward main pass or through the imageProcessingPostProcess if present.
          * As in the majority of the scene they are the same (exception for multi camera),
          * this is easier to reference from here than from all the materials and post process.
-         * 
+         *
          * No setter as we it is a shared configuration, you can set the values instead.
          */
         public get imageProcessingConfiguration(): ImageProcessingConfiguration {
@@ -226,7 +161,7 @@
 
         public forceWireframe = false;
         private _forcePointsCloud = false;
-        public set forcePointsCloud(value : boolean) {
+        public set forcePointsCloud(value: boolean) {
             if (this._forcePointsCloud === value) {
                 return;
             }
@@ -235,7 +170,7 @@
         }
         public get forcePointsCloud(): boolean {
             return this._forcePointsCloud;
-        }   
+        }
 
         public forceShowBoundingBoxes = false;
         public clipPlane: Plane;
@@ -243,11 +178,15 @@
         public constantlyUpdateMeshUnderPointer = false;
 
         public hoverCursor = "pointer";
+        public defaultCursor: string = "";
 
         // Metadata
         public metadata: any = null;
+        public loadingPluginName: string;
 
         // Events
+
+        private _spritePredicate: (sprite: Sprite) => boolean;
 
         /**
         * An event triggered when the scene is disposed.
@@ -256,6 +195,7 @@
         public onDisposeObservable = new Observable<Scene>();
 
         private _onDisposeObserver: Observer<Scene>;
+        /** A function to be executed when this scene is disposed. */
         public set onDispose(callback: () => void) {
             if (this._onDisposeObserver) {
                 this.onDisposeObservable.remove(this._onDisposeObserver);
@@ -270,6 +210,7 @@
         public onBeforeRenderObservable = new Observable<Scene>();
 
         private _onBeforeRenderObserver: Observer<Scene>;
+        /** A function to be executed before rendering this scene */
         public set beforeRender(callback: () => void) {
             if (this._onBeforeRenderObserver) {
                 this.onBeforeRenderObservable.remove(this._onBeforeRenderObserver);
@@ -284,6 +225,7 @@
         public onAfterRenderObservable = new Observable<Scene>();
 
         private _onAfterRenderObserver: Observer<Scene>;
+        /** A function to be executed after rendering this scene */
         public set afterRender(callback: () => void) {
             if (this._onAfterRenderObserver) {
                 this.onAfterRenderObservable.remove(this._onAfterRenderObserver);
@@ -375,6 +317,18 @@
         public onMeshRemovedObservable = new Observable<AbstractMesh>();
 
         /**
+        * An event triggered before calculating deterministic simulation step
+        * @type {BABYLON.Observable}
+        */
+        public onBeforeStepObservable = new Observable<Scene>();
+
+        /**
+        * An event triggered after calculating deterministic simulation step
+        * @type {BABYLON.Observable}
+        */
+        public onAfterStepObservable = new Observable<Scene>();
+
+        /**
          * This Observable will be triggered for each stage of each renderingGroup of each rendered camera.
          * The RenderinGroupInfo class contains all the information about the context in which the observable is called
          * If you wish to register an Observer only for a given set of renderingGroup, use the mask with a combination of the renderingGroup index elevated to the power of two (1 for renderingGroup 0, 2 for renderingrOup1, 4 for 2 and 8 for 3)
@@ -392,14 +346,29 @@
         private _onPointerDown: (evt: PointerEvent) => void;
         private _onPointerUp: (evt: PointerEvent) => void;
 
+        /** Deprecated. Use onPointerObservable instead */
         public onPointerMove: (evt: PointerEvent, pickInfo: PickingInfo) => void;
+        /** Deprecated. Use onPointerObservable instead */
         public onPointerDown: (evt: PointerEvent, pickInfo: PickingInfo) => void;
+        /** Deprecated. Use onPointerObservable instead */
         public onPointerUp: (evt: PointerEvent, pickInfo: PickingInfo) => void;
+        /** Deprecated. Use onPointerObservable instead */
         public onPointerPick: (evt: PointerEvent, pickInfo: PickingInfo) => void;
 
+        // Gamepads
+        private _gamepadManager: GamepadManager;
+
+        public get gamepadManager(): GamepadManager {
+            if (!this._gamepadManager) {
+                this._gamepadManager = new GamepadManager();
+            }
+
+            return this._gamepadManager;
+        }
+
         /**
-         * This observable event is triggered when any mouse event registered during Scene.attach() is called BEFORE the 3D engine to process anything (mesh/sprite picking for instance).
-         * You have the possibility to skip the 3D Engine process and the call to onPointerObservable by setting PointerInfoBase.skipOnPointerObservable to true
+         * This observable event is triggered when any ponter event is triggered. It is registered during Scene.attachControl() and it is called BEFORE the 3D engine process anything (mesh/sprite picking for instance).
+         * You have the possibility to skip the process and the call to onPointerObservable by setting PointerInfoPre.skipOnPointerObservable to true
          */
         public onPrePointerObservable = new Observable<PointerInfoPre>();
 
@@ -412,10 +381,14 @@
             return new Vector2(this._unTranslatedPointerX, this._unTranslatedPointerY);
         }
 
+        /** The distance in pixel that you have to move to prevent some events */
         public static DragMovementThreshold = 10; // in pixels
+        /** Time in milliseconds to wait to raise long press events if button is still pressed */
         public static LongPressDelay = 500; // in milliseconds
+        /** Time in milliseconds with two consecutive clicks will be considered as a double click */
         public static DoubleClickDelay = 300; // in milliseconds
-        public static ExclusiveDoubleClickMode = false; // If you need to check double click without raising a single click at first click, enable this flag
+        /** If you need to check double click without raising a single click at first click, enable this flag */
+        public static ExclusiveDoubleClickMode = false;
 
         private _initClickEvent: (obs1: Observable<PointerInfoPre>, obs2: Observable<PointerInfo>, evt: PointerEvent, cb: (clickInfo: ClickInfo, pickResult: PointerInfo) => void) => void;
         private _initActionManager: (act: ActionManager, clickInfo: ClickInfo) => ActionManager;
@@ -431,7 +404,8 @@
         private _isButtonPressed = false;
         private _doubleClickOccured = false;
 
-        public cameraToUseForPointers: Camera = null; // Define this parameter if you are using multiple cameras and you want to specify which one should be used for pointer position
+        /** Define this parameter if you are using multiple cameras and you want to specify which one should be used for pointer position */
+        public cameraToUseForPointers: Camera = null;
         private _pointerX: number;
         private _pointerY: number;
         private _unTranslatedPointerX: number;
@@ -440,13 +414,31 @@
         private _previousStartingPointerPosition = new Vector2(0, 0);
         private _startingPointerTime = 0;
         private _previousStartingPointerTime = 0;
-        
+
+        // Deterministic lockstep
+        private _timeAccumulator: number = 0;
+        private _currentStepId: number = 0;
+        private _currentInternalStep: number = 0;
+
         // Mirror
         public _mirroredCameraPosition: Vector3;
 
         // Keyboard
+
+        /**
+         * This observable event is triggered when any keyboard event si raised and registered during Scene.attachControl()
+         * You have the possibility to skip the process and the call to onKeyboardObservable by setting KeyboardInfoPre.skipOnPointerObservable to true
+         */
+        public onPreKeyboardObservable = new Observable<KeyboardInfoPre>();
+        
+        /**
+         * Observable event triggered each time an keyboard event is received from the hosting window
+         */
+        public onKeyboardObservable = new Observable<KeyboardInfo>();
         private _onKeyDown: (evt: Event) => void;
         private _onKeyUp: (evt: Event) => void;
+        private _onCanvasFocusObserver: Observer<Engine>;
+        private _onCanvasBlurObserver: Observer<Engine>;
 
         // Coordinate system
         /**
@@ -465,13 +457,25 @@
             return this._useRightHandedSystem;
         }
 
+        public setStepId(newStepId: number): void {
+            this._currentStepId = newStepId;
+        };
+
+        public getStepId(): number {
+            return this._currentStepId;
+        };
+
+        public getInternalStep(): number {
+            return this._currentInternalStep;
+        };
+
         // Fog
+
+        private _fogEnabled = true;
         /**
         * is fog enabled on this scene.
-        * @type {boolean}
         */
-        private _fogEnabled = true;
-        public set fogEnabled(value : boolean) {
+        public set fogEnabled(value: boolean) {
             if (this._fogEnabled === value) {
                 return;
             }
@@ -480,10 +484,10 @@
         }
         public get fogEnabled(): boolean {
             return this._fogEnabled;
-        }   
+        }
 
         private _fogMode = Scene.FOGMODE_NONE;
-        public set fogMode(value : number) {
+        public set fogMode(value: number) {
             if (this._fogMode === value) {
                 return;
             }
@@ -492,7 +496,7 @@
         }
         public get fogMode(): number {
             return this._fogMode;
-        }  
+        }
 
         public fogColor = new Color3(0.2, 0.2, 0.3);
         public fogDensity = 0.1;
@@ -505,7 +509,7 @@
         * @type {boolean}
         */
         private _shadowsEnabled = true;
-        public set shadowsEnabled(value : boolean) {
+        public set shadowsEnabled(value: boolean) {
             if (this._shadowsEnabled === value) {
                 return;
             }
@@ -514,14 +518,14 @@
         }
         public get shadowsEnabled(): boolean {
             return this._shadowsEnabled;
-        }       
+        }
 
         /**
         * is light enabled on this scene.
         * @type {boolean}
         */
         private _lightsEnabled = true;
-        public set lightsEnabled(value : boolean) {
+        public set lightsEnabled(value: boolean) {
             if (this._lightsEnabled === value) {
                 return;
             }
@@ -541,13 +545,11 @@
         public lights = new Array<Light>();
 
         // Cameras
-        /**
-        * All of the cameras added to this scene.
-        * @see BABYLON.Camera
-        * @type {BABYLON.Camera[]}
-        */
+        /** All of the cameras added to this scene. */
         public cameras = new Array<Camera>();
+        /** All of the active cameras added to this scene. */
         public activeCameras = new Array<Camera>();
+        /** The current active camera */
         public activeCamera: Camera;
 
         // Meshes
@@ -565,6 +567,7 @@
         public multiMaterials = new Array<MultiMaterial>();
         private _defaultMaterial: Material;
 
+        /** The default material used on meshes when no material is affected */
         public get defaultMaterial(): Material {
             if (!this._defaultMaterial) {
                 this._defaultMaterial = new StandardMaterial("default material", this);
@@ -573,13 +576,14 @@
             return this._defaultMaterial;
         }
 
+        /** The default material used on meshes when no material is affected */
         public set defaultMaterial(value: Material) {
             this._defaultMaterial = value;
         }
 
         // Textures
         private _texturesEnabled = true;
-        public set texturesEnabled(value : boolean) {
+        public set texturesEnabled(value: boolean) {
             if (this._texturesEnabled === value) {
                 return;
             }
@@ -589,13 +593,13 @@
 
         public get texturesEnabled(): boolean {
             return this._texturesEnabled;
-        }     
+        }
 
         public textures = new Array<BaseTexture>();
 
         // Particles
         public particlesEnabled = true;
-        public particleSystems = new Array<ParticleSystem>();
+        public particleSystems = new Array<IParticleSystem>();
 
         // Sprites
         public spritesEnabled = true;
@@ -607,7 +611,7 @@
 
         // Skeletons
         private _skeletonsEnabled = true;
-        public set skeletonsEnabled(value : boolean) {
+        public set skeletonsEnabled(value: boolean) {
             if (this._skeletonsEnabled === value) {
                 return;
             }
@@ -617,7 +621,7 @@
 
         public get skeletonsEnabled(): boolean {
             return this._skeletonsEnabled;
-        }       
+        }
 
         public skeletons = new Array<Skeleton>();
 
@@ -632,9 +636,11 @@
         public collisionsEnabled = true;
         private _workerCollisions;
         public collisionCoordinator: ICollisionCoordinator;
+        /** Defines the gravity applied to this scene */
         public gravity = new Vector3(0, -9.807, 0);
 
         // Postprocesses
+        public postProcesses = new Array<PostProcess>();
         public postProcessesEnabled = true;
         public postProcessManager: PostProcessManager;
         private _postProcessRenderPipelineManager: PostProcessRenderPipelineManager
@@ -683,6 +689,9 @@
         private _audioEnabled = true;
         private _headphone = false;
 
+        // VR Helper
+        public VRHelper: VRExperienceHelper;
+
         //Simplification Queue
         public simplificationQueue: SimplificationQueue;
 
@@ -697,6 +706,7 @@
         private _totalVertices = new PerfCounter();
         public _activeIndices = new PerfCounter();
         public _activeParticles = new PerfCounter();
+        private _interFrameDuration = new PerfCounter();
         private _lastFrameDuration = new PerfCounter();
         private _evaluateActiveMeshesDuration = new PerfCounter();
         private _renderTargetsDuration = new PerfCounter();
@@ -721,6 +731,8 @@
 
         private _viewUpdateFlag = -1;
         private _projectionUpdateFlag = -1;
+        private _alternateViewUpdateFlag = -1;
+        private _alternateProjectionUpdateFlag = -1;
 
         public _toBeDisposed = new SmartArray<IDisposable>(256);
         private _pendingData = [];//ANY
@@ -728,7 +740,7 @@
         private _activeMeshes = new SmartArray<Mesh>(256);
         private _processedMaterials = new SmartArray<Material>(256);
         private _renderTargets = new SmartArray<RenderTargetTexture>(256);
-        public _activeParticleSystems = new SmartArray<ParticleSystem>(256);
+        public _activeParticleSystems = new SmartArray<IParticleSystem>(256);
         private _activeSkeletons = new SmartArray<Skeleton>(32);
         private _softwareSkinnedMeshes = new SmartArray<Mesh>(32);
 
@@ -739,15 +751,25 @@
 
         private _transformMatrix = Matrix.Zero();
         private _sceneUbo: UniformBuffer;
+        private _alternateSceneUbo: UniformBuffer;
 
         private _pickWithRayInverseMatrix: Matrix;
-        
+
         private _boundingBoxRenderer: BoundingBoxRenderer;
         private _outlineRenderer: OutlineRenderer;
 
         private _viewMatrix: Matrix;
         private _projectionMatrix: Matrix;
-        
+        private _alternateViewMatrix: Matrix;
+        private _alternateProjectionMatrix: Matrix;
+        private _alternateTransformMatrix: Matrix;
+        private _useAlternateCameraConfiguration = false;
+        private _alternateRendering = false;
+
+        public get _isAlternateRenderingEnabled(): boolean {
+            return this._alternateRendering;
+        }
+
         private _frustumPlanes: Plane[];
         public get frustumPlanes(): Plane[] {
             return this._frustumPlanes;
@@ -881,7 +903,7 @@
             return this._cachedVisibility;
         }
 
-        public isCachedMaterialValid(material: Material, effect: Effect, visibility: number = 0) {
+        public isCachedMaterialInvalid(material: Material, effect: Effect, visibility: number = 1) {
             return this._cachedEffect !== effect || this._cachedMaterial !== material || this._cachedVisibility !== visibility;
         }
 
@@ -934,6 +956,14 @@
         }
 
         // Stats
+        public getInterFramePerfCounter(): number {
+            return this._interFrameDuration.current;
+        }
+
+        public get interFramePerfCounter(): PerfCounter {
+            return this._interFrameDuration;
+        }
+
         public getLastFrameDuration(): number {
             return this._lastFrameDuration.current;
         }
@@ -1002,11 +1032,6 @@
 
             this._unTranslatedPointerX = this._pointerX;
             this._unTranslatedPointerY = this._pointerY;
-
-            if (this.cameraToUseForPointers) {
-                this._pointerX = this._pointerX - this.cameraToUseForPointers.viewport.x * this._engine.getRenderWidth();
-                this._pointerY = this._pointerY - this.cameraToUseForPointers.viewport.y * this._engine.getRenderHeight();
-            }
         }
 
         private _createUbo(): void {
@@ -1015,7 +1040,209 @@
             this._sceneUbo.addUniform("view", 16);
         }
 
+        private _createAlternateUbo(): void {
+            this._alternateSceneUbo = new UniformBuffer(this._engine, null, true);
+            this._alternateSceneUbo.addUniform("viewProjection", 16);
+            this._alternateSceneUbo.addUniform("view", 16);
+        }
+
         // Pointers handling
+
+        /**
+         * Use this method to simulate a pointer move on a mesh
+         * The pickResult parameter can be obtained from a scene.pick or scene.pickWithRay
+         */
+        public simulatePointerMove(pickResult: PickingInfo): Scene {
+            let evt = new PointerEvent("pointermove");
+
+            return this._processPointerMove(pickResult, evt);
+        }
+
+        private _processPointerMove(pickResult: PickingInfo, evt: PointerEvent): Scene {
+            
+            var canvas = this._engine.getRenderingCanvas();
+
+            if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+                this.setPointerOverSprite(null);
+
+                this.setPointerOverMesh(pickResult.pickedMesh);
+
+                if (this._pointerOverMesh.actionManager && this._pointerOverMesh.actionManager.hasPointerTriggers) {
+                    if (this._pointerOverMesh.actionManager.hoverCursor) {
+                        canvas.style.cursor = this._pointerOverMesh.actionManager.hoverCursor;
+                    } else {
+                        canvas.style.cursor = this.hoverCursor;
+                    }
+                } else {
+                    canvas.style.cursor = this.defaultCursor;
+                }
+            } else {
+                this.setPointerOverMesh(null);
+                // Sprites
+                pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, this._spritePredicate, false, this.cameraToUseForPointers);
+
+                if (pickResult && pickResult.hit && pickResult.pickedSprite) {
+                    this.setPointerOverSprite(pickResult.pickedSprite);
+                    if (this._pointerOverSprite.actionManager && this._pointerOverSprite.actionManager.hoverCursor) {
+                        canvas.style.cursor = this._pointerOverSprite.actionManager.hoverCursor;
+                    } else {
+                        canvas.style.cursor = this.hoverCursor;
+                    }
+                } else {
+                    this.setPointerOverSprite(null);
+                    // Restore pointer
+                    canvas.style.cursor = this.defaultCursor;
+                }
+            }
+
+            if (this.onPointerMove) {
+                this.onPointerMove(evt, pickResult);
+            }
+
+            if (this.onPointerObservable.hasObservers()) {
+                let type = evt.type === "mousewheel" || evt.type === "DOMMouseScroll" ? PointerEventTypes.POINTERWHEEL : PointerEventTypes.POINTERMOVE;
+                let pi = new PointerInfo(type, evt, pickResult);
+                this.onPointerObservable.notifyObservers(pi, type);
+            }
+
+            return this;            
+        }
+
+        /**
+         * Use this method to simulate a pointer down on a mesh
+         * The pickResult parameter can be obtained from a scene.pick or scene.pickWithRay
+         */
+        public simulatePointerDown(pickResult: PickingInfo): Scene {
+            let evt = new PointerEvent("pointerdown");
+
+            return this._processPointerDown(pickResult, evt);
+        }        
+
+        private _processPointerDown(pickResult: PickingInfo, evt: PointerEvent): Scene {
+            if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+                this._pickedDownMesh = pickResult.pickedMesh;
+                var actionManager = pickResult.pickedMesh.actionManager;
+                if (actionManager) {
+                    if (actionManager.hasPickTriggers) {
+                        actionManager.processTrigger(ActionManager.OnPickDownTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                        switch (evt.button) {
+                            case 0:
+                                actionManager.processTrigger(ActionManager.OnLeftPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                                break;
+                            case 1:
+                                actionManager.processTrigger(ActionManager.OnCenterPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                                break;
+                            case 2:
+                                actionManager.processTrigger(ActionManager.OnRightPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                                break;
+                        }
+                    }
+
+                    if (actionManager.hasSpecificTrigger(ActionManager.OnLongPressTrigger)) {
+                        window.setTimeout((function () {
+                            var pickResult = this.pick(this._unTranslatedPointerX, this._unTranslatedPointerY,
+                                (mesh: AbstractMesh): boolean => mesh.isPickable && mesh.isVisible && mesh.isReady() && mesh.actionManager && mesh.actionManager.hasSpecificTrigger(ActionManager.OnLongPressTrigger) && mesh == this._pickedDownMesh,
+                                false, this.cameraToUseForPointers);
+
+                            if (pickResult && pickResult.hit && pickResult.pickedMesh) {
+                                if (this._isButtonPressed &&
+                                    ((new Date().getTime() - this._startingPointerTime) > Scene.LongPressDelay) &&
+                                    (Math.abs(this._startingPointerPosition.x - this._pointerX) < Scene.DragMovementThreshold &&
+                                        Math.abs(this._startingPointerPosition.y - this._pointerY) < Scene.DragMovementThreshold)) {
+                                    this._startingPointerTime = 0;
+                                    actionManager.processTrigger(ActionManager.OnLongPressTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                                }
+                            }
+                        }).bind(this), Scene.LongPressDelay);
+                    }
+                }
+            }
+
+            if (this.onPointerDown) {
+                this.onPointerDown(evt, pickResult);
+            }
+
+            if (this.onPointerObservable.hasObservers()) {
+                let type = PointerEventTypes.POINTERDOWN;
+                let pi = new PointerInfo(type, evt, pickResult);
+                this.onPointerObservable.notifyObservers(pi, type);
+            }
+
+            return this;
+        }
+
+        /**
+         * Use this method to simulate a pointer up on a mesh
+         * The pickResult parameter can be obtained from a scene.pick or scene.pickWithRay
+         */
+        public simulatePointerUp(pickResult: PickingInfo): Scene {
+            let evt = new PointerEvent("pointerup");
+            let clickInfo = new ClickInfo();
+            clickInfo.singleClick = true;
+
+            return this._processPointerUp(pickResult, evt, clickInfo);
+        }    
+
+        private _processPointerUp(pickResult: PickingInfo, evt: PointerEvent, clickInfo: ClickInfo): Scene {            
+            if (pickResult && pickResult && pickResult.pickedMesh) {
+                this._pickedUpMesh = pickResult.pickedMesh;
+                if (this._pickedDownMesh === this._pickedUpMesh) {
+                    if (this.onPointerPick) {
+                        this.onPointerPick(evt, pickResult);
+                    }
+                    if (clickInfo.singleClick && !clickInfo.ignore && this.onPointerObservable.hasObservers()) {
+                        let type = PointerEventTypes.POINTERPICK;
+                        let pi = new PointerInfo(type, evt, pickResult);
+                        this.onPointerObservable.notifyObservers(pi, type);
+                    }
+                }
+                if (pickResult.pickedMesh.actionManager) {
+                    if (clickInfo.ignore) {
+                        pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnPickUpTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                    }
+                    if (!clickInfo.hasSwiped && !clickInfo.ignore && clickInfo.singleClick) {
+                        pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                    }
+                    if (clickInfo.doubleClick && !clickInfo.ignore && pickResult.pickedMesh.actionManager.hasSpecificTrigger(ActionManager.OnDoublePickTrigger)) {
+                        pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnDoublePickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
+                    }
+                }
+            }
+            if (this._pickedDownMesh &&
+                this._pickedDownMesh.actionManager &&
+                this._pickedDownMesh.actionManager.hasSpecificTrigger(ActionManager.OnPickOutTrigger) &&
+                this._pickedDownMesh !== this._pickedUpMesh) {
+                this._pickedDownMesh.actionManager.processTrigger(ActionManager.OnPickOutTrigger, ActionEvent.CreateNew(this._pickedDownMesh, evt));
+            }
+
+            if (this.onPointerUp) {
+                this.onPointerUp(evt, pickResult);
+            }
+
+            if (this.onPointerObservable.hasObservers()) {
+                if (!clickInfo.ignore) {
+                    if (!clickInfo.hasSwiped) {
+                        if (clickInfo.singleClick && this.onPointerObservable.hasSpecificMask(PointerEventTypes.POINTERTAP)) {
+                            let type = PointerEventTypes.POINTERTAP;
+                            let pi = new PointerInfo(type, evt, pickResult);
+                            this.onPointerObservable.notifyObservers(pi, type);
+                        }
+                        if (clickInfo.doubleClick && this.onPointerObservable.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP)) {
+                            let type = PointerEventTypes.POINTERDOUBLETAP;
+                            let pi = new PointerInfo(type, evt, pickResult);
+                            this.onPointerObservable.notifyObservers(pi, type);
+                        }
+                    }
+                }
+                else {
+                    let type = PointerEventTypes.POINTERUP;
+                    let pi = new PointerInfo(type, evt, pickResult);
+                    this.onPointerObservable.notifyObservers(pi, type);
+                }
+            }
+
+            return this;
+        }
 
         /**
         * Attach events to the canvas (To handle actionManagers triggers and raise onPointerMove, onPointerDown and onPointerUp
@@ -1039,7 +1266,7 @@
             this._delayedSimpleClick = (btn: number, clickInfo: ClickInfo, cb: (clickInfo: ClickInfo, pickResult: PointerInfo) => void) => {
                 // double click delay is over and that no double click has been raised since, or the 2 consecutive keys pressed are different
                 if ((new Date().getTime() - this._previousStartingPointerTime > Scene.DoubleClickDelay && !this._doubleClickOccured) ||
-                btn !== this._previousButtonPressed ) {
+                    btn !== this._previousButtonPressed) {
                     this._doubleClickOccured = false;
                     clickInfo.singleClick = true;
                     clickInfo.ignore = false;
@@ -1048,99 +1275,79 @@
             }
 
             this._initClickEvent = (obs1: Observable<PointerInfoPre>, obs2: Observable<PointerInfo>, evt: PointerEvent, cb: (clickInfo: ClickInfo, pickResult: PointerInfo) => void): void => {
-                    let clickInfo = new ClickInfo();
-                    this._currentPickResult = null;
-                    let act;
+                let clickInfo = new ClickInfo();
+                this._currentPickResult = null;
+                let act;
 
-                    let checkPicking = obs1.hasSpecificMask(PointerEventTypes.POINTERPICK) || obs2.hasSpecificMask(PointerEventTypes.POINTERPICK)
-                                    || obs1.hasSpecificMask(PointerEventTypes.POINTERTAP) || obs2.hasSpecificMask(PointerEventTypes.POINTERTAP)
-                                    || obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) || obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
-                    if (!checkPicking && BABYLON.ActionManager && ActionManager.HasPickTriggers) {
-                        act = this._initActionManager(act, clickInfo);
-                        if (act)
-                            checkPicking = act.hasPickTriggers;
-                    }
-                    if (checkPicking) {
-                        let btn = evt.button;
-                        clickInfo.hasSwiped = Math.abs(this._startingPointerPosition.x - this._pointerX) > Scene.DragMovementThreshold ||
-                                              Math.abs(this._startingPointerPosition.y - this._pointerY) > Scene.DragMovementThreshold;
+                let checkPicking = obs1.hasSpecificMask(PointerEventTypes.POINTERPICK) || obs2.hasSpecificMask(PointerEventTypes.POINTERPICK)
+                    || obs1.hasSpecificMask(PointerEventTypes.POINTERTAP) || obs2.hasSpecificMask(PointerEventTypes.POINTERTAP)
+                    || obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) || obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
+                if (!checkPicking && BABYLON.ActionManager && ActionManager.HasPickTriggers) {
+                    act = this._initActionManager(act, clickInfo);
+                    if (act)
+                        checkPicking = act.hasPickTriggers;
+                }
+                if (checkPicking) {
+                    let btn = evt.button;
+                    clickInfo.hasSwiped = Math.abs(this._startingPointerPosition.x - this._pointerX) > Scene.DragMovementThreshold ||
+                        Math.abs(this._startingPointerPosition.y - this._pointerY) > Scene.DragMovementThreshold;
 
-                        if (!clickInfo.hasSwiped) {
-                            let checkSingleClickImmediately = !Scene.ExclusiveDoubleClickMode;
+                    if (!clickInfo.hasSwiped) {
+                        let checkSingleClickImmediately = !Scene.ExclusiveDoubleClickMode;
 
-                            if (!checkSingleClickImmediately) {
-                                checkSingleClickImmediately = !obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) &&
-                                                              !obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
+                        if (!checkSingleClickImmediately) {
+                            checkSingleClickImmediately = !obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) &&
+                                !obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
 
-                                if (checkSingleClickImmediately && !ActionManager.HasSpecificTrigger(ActionManager.OnDoublePickTrigger)) {
-                                    act = this._initActionManager(act, clickInfo);
-                                    if (act)
-                                        checkSingleClickImmediately = !act.hasSpecificTrigger(ActionManager.OnDoublePickTrigger);
-                                }
-                            }
-
-                            if (checkSingleClickImmediately) {
-                                // single click detected if double click delay is over or two different successive keys pressed without exclusive double click or no double click required
-                                if (new Date().getTime() - this._previousStartingPointerTime > Scene.DoubleClickDelay ||
-                                    btn !== this._previousButtonPressed ) {
-                                        clickInfo.singleClick = true;
-                                        cb(clickInfo, this._currentPickResult);
-                                }
-                            }
-                            // at least one double click is required to be check and exclusive double click is enabled
-                            else {
-                                // wait that no double click has been raised during the double click delay
-                                this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
-                                this._delayedSimpleClickTimeout = window.setTimeout(this._delayedSimpleClick.bind(this, btn, clickInfo, cb), Scene.DoubleClickDelay);
-                            }
-
-                            let checkDoubleClick = obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) ||
-                                                   obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
-                            if (!checkDoubleClick && ActionManager.HasSpecificTrigger(ActionManager.OnDoublePickTrigger)){
+                            if (checkSingleClickImmediately && !ActionManager.HasSpecificTrigger(ActionManager.OnDoublePickTrigger)) {
                                 act = this._initActionManager(act, clickInfo);
                                 if (act)
-                                    checkDoubleClick = act.hasSpecificTrigger(ActionManager.OnDoublePickTrigger);
+                                    checkSingleClickImmediately = !act.hasSpecificTrigger(ActionManager.OnDoublePickTrigger);
                             }
-                            if (checkDoubleClick) {
-                                // two successive keys pressed are equal, double click delay is not over and double click has not just occurred
-                                if (btn === this._previousButtonPressed &&
-                                    new Date().getTime() - this._previousStartingPointerTime < Scene.DoubleClickDelay &&
-                                    !this._doubleClickOccured
-                                ) {
-                                    // pointer has not moved for 2 clicks, it's a double click
-                                    if (!clickInfo.hasSwiped &&
-                                        Math.abs(this._previousStartingPointerPosition.x - this._startingPointerPosition.x) < Scene.DragMovementThreshold &&
-                                        Math.abs(this._previousStartingPointerPosition.y - this._startingPointerPosition.y) < Scene.DragMovementThreshold) {
-                                        this._previousStartingPointerTime = 0;
-                                        this._doubleClickOccured = true;
-                                        clickInfo.doubleClick = true;
-                                        clickInfo.ignore = false;
-                                        if (Scene.ExclusiveDoubleClickMode && this._previousDelayedSimpleClickTimeout && this._previousDelayedSimpleClickTimeout.clearTimeout)
-                                            this._previousDelayedSimpleClickTimeout.clearTimeout();
-                                        this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
-                                        cb(clickInfo, this._currentPickResult);
-                                    }
-                                    // if the two successive clicks are too far, it's just two simple clicks
-                                    else {
-                                        this._doubleClickOccured = false;
-                                        this._previousStartingPointerTime = this._startingPointerTime;
-                                        this._previousStartingPointerPosition.x = this._startingPointerPosition.x;
-                                        this._previousStartingPointerPosition.y = this._startingPointerPosition.y;
-                                        this._previousButtonPressed = btn;
-                                        this._previousHasSwiped = clickInfo.hasSwiped;
-                                        if (Scene.ExclusiveDoubleClickMode){
-                                            if (this._previousDelayedSimpleClickTimeout && this._previousDelayedSimpleClickTimeout.clearTimeout) {
-                                                this._previousDelayedSimpleClickTimeout.clearTimeout();
-                                            }
-                                            this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
-                                            cb(clickInfo, this._previousPickResult);
-                                        }
-                                        else {
-                                            cb(clickInfo, this._currentPickResult);
-                                        }
-                                    }
+                        }
+
+                        if (checkSingleClickImmediately) {
+                            // single click detected if double click delay is over or two different successive keys pressed without exclusive double click or no double click required
+                            if (new Date().getTime() - this._previousStartingPointerTime > Scene.DoubleClickDelay ||
+                                btn !== this._previousButtonPressed) {
+                                clickInfo.singleClick = true;
+                                cb(clickInfo, this._currentPickResult);
+                            }
+                        }
+                        // at least one double click is required to be check and exclusive double click is enabled
+                        else {
+                            // wait that no double click has been raised during the double click delay
+                            this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
+                            this._delayedSimpleClickTimeout = window.setTimeout(this._delayedSimpleClick.bind(this, btn, clickInfo, cb), Scene.DoubleClickDelay);
+                        }
+
+                        let checkDoubleClick = obs1.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP) ||
+                            obs2.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP);
+                        if (!checkDoubleClick && ActionManager.HasSpecificTrigger(ActionManager.OnDoublePickTrigger)) {
+                            act = this._initActionManager(act, clickInfo);
+                            if (act)
+                                checkDoubleClick = act.hasSpecificTrigger(ActionManager.OnDoublePickTrigger);
+                        }
+                        if (checkDoubleClick) {
+                            // two successive keys pressed are equal, double click delay is not over and double click has not just occurred
+                            if (btn === this._previousButtonPressed &&
+                                new Date().getTime() - this._previousStartingPointerTime < Scene.DoubleClickDelay &&
+                                !this._doubleClickOccured
+                            ) {
+                                // pointer has not moved for 2 clicks, it's a double click
+                                if (!clickInfo.hasSwiped &&
+                                    Math.abs(this._previousStartingPointerPosition.x - this._startingPointerPosition.x) < Scene.DragMovementThreshold &&
+                                    Math.abs(this._previousStartingPointerPosition.y - this._startingPointerPosition.y) < Scene.DragMovementThreshold) {
+                                    this._previousStartingPointerTime = 0;
+                                    this._doubleClickOccured = true;
+                                    clickInfo.doubleClick = true;
+                                    clickInfo.ignore = false;
+                                    if (Scene.ExclusiveDoubleClickMode && this._previousDelayedSimpleClickTimeout && this._previousDelayedSimpleClickTimeout.clearTimeout)
+                                        this._previousDelayedSimpleClickTimeout.clearTimeout();
+                                    this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
+                                    cb(clickInfo, this._currentPickResult);
                                 }
-                                // just the first click of the double has been raised
+                                // if the two successive clicks are too far, it's just two simple clicks
                                 else {
                                     this._doubleClickOccured = false;
                                     this._previousStartingPointerTime = this._startingPointerTime;
@@ -1148,15 +1355,35 @@
                                     this._previousStartingPointerPosition.y = this._startingPointerPosition.y;
                                     this._previousButtonPressed = btn;
                                     this._previousHasSwiped = clickInfo.hasSwiped;
+                                    if (Scene.ExclusiveDoubleClickMode) {
+                                        if (this._previousDelayedSimpleClickTimeout && this._previousDelayedSimpleClickTimeout.clearTimeout) {
+                                            this._previousDelayedSimpleClickTimeout.clearTimeout();
+                                        }
+                                        this._previousDelayedSimpleClickTimeout = this._delayedSimpleClickTimeout;
+                                        cb(clickInfo, this._previousPickResult);
+                                    }
+                                    else {
+                                        cb(clickInfo, this._currentPickResult);
+                                    }
                                 }
+                            }
+                            // just the first click of the double has been raised
+                            else {
+                                this._doubleClickOccured = false;
+                                this._previousStartingPointerTime = this._startingPointerTime;
+                                this._previousStartingPointerPosition.x = this._startingPointerPosition.x;
+                                this._previousStartingPointerPosition.y = this._startingPointerPosition.y;
+                                this._previousButtonPressed = btn;
+                                this._previousHasSwiped = clickInfo.hasSwiped;
                             }
                         }
                     }
-                    clickInfo.ignore = true;
-                    cb(clickInfo, this._currentPickResult);
+                }
+                clickInfo.ignore = true;
+                cb(clickInfo, this._currentPickResult);
             };
 
-            var spritePredicate = (sprite: Sprite): boolean => {
+            this._spritePredicate = (sprite: Sprite): boolean => {
                 return sprite.isPickable && sprite.actionManager && sprite.actionManager.hasPointerTriggers;
             };
 
@@ -1178,57 +1405,14 @@
                     return;
                 }
 
-                var canvas = this._engine.getRenderingCanvas();
-
                 if (!this.pointerMovePredicate) {
-                    this.pointerMovePredicate = (mesh: AbstractMesh): boolean => mesh.isPickable && mesh.isVisible && mesh.isReady() && mesh.isEnabled() && (this.constantlyUpdateMeshUnderPointer || (mesh.actionManager !== null && mesh.actionManager !== undefined));
+                    this.pointerMovePredicate = (mesh: AbstractMesh): boolean => mesh.isPickable && mesh.isVisible && mesh.isReady() && mesh.isEnabled() && (mesh.enablePointerMoveEvents || this.constantlyUpdateMeshUnderPointer || (mesh.actionManager !== null && mesh.actionManager !== undefined));
                 }
 
                 // Meshes
-                var pickResult = this.pick(this._unTranslatedPointerX, this._unTranslatedPointerY, this.pointerMovePredicate, false, this.cameraToUseForPointers);
+                var pickResult = this.pick(this._unTranslatedPointerX, this._unTranslatedPointerY, this.pointerMovePredicate, false, this.cameraToUseForPointers);             
 
-                if (pickResult && pickResult.hit && pickResult.pickedMesh) {
-                    this.setPointerOverSprite(null);
-
-                    this.setPointerOverMesh(pickResult.pickedMesh);
-
-                    if (this._pointerOverMesh.actionManager && this._pointerOverMesh.actionManager.hasPointerTriggers) {
-                        if (this._pointerOverMesh.actionManager.hoverCursor) {
-                            canvas.style.cursor = this._pointerOverMesh.actionManager.hoverCursor;
-                        } else {
-                            canvas.style.cursor = this.hoverCursor;
-                        }
-                    } else {
-                        canvas.style.cursor = "";
-                    }
-                } else {
-                    this.setPointerOverMesh(null);
-                    // Sprites
-                    pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, spritePredicate, false, this.cameraToUseForPointers);
-
-                    if (pickResult && pickResult.hit && pickResult.pickedSprite) {
-                        this.setPointerOverSprite(pickResult.pickedSprite);
-                        if (this._pointerOverSprite.actionManager && this._pointerOverSprite.actionManager.hoverCursor) {
-                            canvas.style.cursor = this._pointerOverSprite.actionManager.hoverCursor;
-                        } else {
-                            canvas.style.cursor = this.hoverCursor;
-                        }
-                    } else {
-                        this.setPointerOverSprite(null);
-                        // Restore pointer
-                        canvas.style.cursor = "";
-                    }
-                }
-
-                if (this.onPointerMove) {
-                    this.onPointerMove(evt, pickResult);
-                }
-
-                if (this.onPointerObservable.hasObservers()) {
-                    let type = evt.type === "mousewheel" || evt.type === "DOMMouseScroll" ? PointerEventTypes.POINTERWHEEL : PointerEventTypes.POINTERMOVE;
-                    let pi = new PointerInfo(type, evt, pickResult);
-                    this.onPointerObservable.notifyObservers(pi, type);
-                }
+                this._processPointerMove(pickResult, evt);
             };
 
             this._onPointerDown = (evt: PointerEvent) => {
@@ -1266,59 +1450,12 @@
                 this._pickedDownMesh = null;
                 var pickResult = this.pick(this._unTranslatedPointerX, this._unTranslatedPointerY, this.pointerDownPredicate, false, this.cameraToUseForPointers);
 
-                if (pickResult && pickResult.hit && pickResult.pickedMesh) {
-                    this._pickedDownMesh = pickResult.pickedMesh;
-                    var actionManager = pickResult.pickedMesh.actionManager;
-                    if (actionManager) {
-                        if (actionManager.hasPickTriggers) {
-                            actionManager.processTrigger(ActionManager.OnPickDownTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                            switch (evt.button) {
-                                case 0:
-                                    actionManager.processTrigger(ActionManager.OnLeftPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                                    break;
-                                case 1:
-                                    actionManager.processTrigger(ActionManager.OnCenterPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                                    break;
-                                case 2:
-                                    actionManager.processTrigger(ActionManager.OnRightPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                                    break;
-                            }
-                        }
-
-                        if (actionManager.hasSpecificTrigger(ActionManager.OnLongPressTrigger)) {
-                            window.setTimeout((function () {
-                                var pickResult = this.pick(this._unTranslatedPointerX, this._unTranslatedPointerY,
-                                    (mesh: AbstractMesh): boolean => mesh.isPickable && mesh.isVisible && mesh.isReady() && mesh.actionManager && mesh.actionManager.hasSpecificTrigger(ActionManager.OnLongPressTrigger) && mesh == this._pickedDownMesh,
-                                    false, this.cameraToUseForPointers);
-
-                                if (pickResult && pickResult.hit && pickResult.pickedMesh) {
-                                    if (this._isButtonPressed &&
-                                        ((new Date().getTime() - this._startingPointerTime) > Scene.LongPressDelay) &&
-                                        (Math.abs(this._startingPointerPosition.x - this._pointerX) < Scene.DragMovementThreshold &&
-                                         Math.abs(this._startingPointerPosition.y - this._pointerY) < Scene.DragMovementThreshold)) {
-                                            this._startingPointerTime = 0;
-                                            actionManager.processTrigger(ActionManager.OnLongPressTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                                    }
-                                }
-                            }).bind(this), Scene.LongPressDelay);
-                        }
-                    }
-                }
-
-                if (this.onPointerDown) {
-                    this.onPointerDown(evt, pickResult);
-                }
-
-                if (this.onPointerObservable.hasObservers()) {
-                    let type = PointerEventTypes.POINTERDOWN;
-                    let pi = new PointerInfo(type, evt, pickResult);
-                    this.onPointerObservable.notifyObservers(pi, type);
-                }
+                this._processPointerDown(pickResult, evt);
 
                 // Sprites
                 this._pickedDownSprite = null;
                 if (this.spriteManagers.length > 0) {
-                    pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, spritePredicate, false, this.cameraToUseForPointers);
+                    pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, this._spritePredicate, false, this.cameraToUseForPointers);
 
                     if (pickResult && pickResult.hit && pickResult.pickedSprite) {
                         if (pickResult.pickedSprite.actionManager) {
@@ -1349,7 +1486,7 @@
 
                 this._updatePointerPosition(evt);
 
-                this._initClickEvent(this.onPrePointerObservable, this.onPointerObservable,  evt, (function(clickInfo, pickResult){
+                this._initClickEvent(this.onPrePointerObservable, this.onPointerObservable, evt, (function (clickInfo, pickResult) {
                     // PreObservable support
                     if (this.onPrePointerObservable.hasObservers()) {
                         if (!clickInfo.ignore) {
@@ -1400,66 +1537,11 @@
                         pickResult = this._currentPickResult;
                     }
 
-                    if (pickResult && pickResult && pickResult.pickedMesh) {
-                        this._pickedUpMesh = pickResult.pickedMesh;
-                        if (this._pickedDownMesh === this._pickedUpMesh) {
-                            if (this.onPointerPick) {
-                                this.onPointerPick(evt, pickResult);
-                            }
-                            if (clickInfo.singleClick && !clickInfo.ignore && this.onPointerObservable.hasObservers()) {
-                                let type = PointerEventTypes.POINTERPICK;
-                                let pi = new PointerInfo(type, evt, pickResult);
-                                this.onPointerObservable.notifyObservers(pi, type);
-                            }
-                        }
-                        if (pickResult.pickedMesh.actionManager) {
-                            if (clickInfo.ignore) {
-                                pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnPickUpTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                            }
-                            if (!clickInfo.hasSwiped && !clickInfo.ignore && clickInfo.singleClick) {
-                                pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnPickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                            }
-                            if (clickInfo.doubleClick && !clickInfo.ignore && pickResult.pickedMesh.actionManager.hasSpecificTrigger(ActionManager.OnDoublePickTrigger)) {
-                                pickResult.pickedMesh.actionManager.processTrigger(ActionManager.OnDoublePickTrigger, ActionEvent.CreateNew(pickResult.pickedMesh, evt));
-                            }
-                        }
-                    }
-                    if (this._pickedDownMesh &&
-                        this._pickedDownMesh.actionManager && 
-                        this._pickedDownMesh.actionManager.hasSpecificTrigger(ActionManager.OnPickOutTrigger) &&
-                        this._pickedDownMesh !== this._pickedUpMesh) {
-                        this._pickedDownMesh.actionManager.processTrigger(ActionManager.OnPickOutTrigger, ActionEvent.CreateNew(this._pickedDownMesh, evt));
-                    }
-
-                    if (this.onPointerUp) {
-                        this.onPointerUp(evt, pickResult);
-                    }
-
-                    if (this.onPointerObservable.hasObservers()) {
-                        if (!clickInfo.ignore) {
-                            if (!clickInfo.hasSwiped) {
-                                if (clickInfo.singleClick && this.onPointerObservable.hasSpecificMask(PointerEventTypes.POINTERTAP)) {
-                                    let type = PointerEventTypes.POINTERTAP;
-                                    let pi = new PointerInfo(type, evt, pickResult);
-                                    this.onPointerObservable.notifyObservers(pi, type);
-                                }
-                                if (clickInfo.doubleClick && this.onPointerObservable.hasSpecificMask(PointerEventTypes.POINTERDOUBLETAP)) {
-                                    let type = PointerEventTypes.POINTERDOUBLETAP;
-                                    let pi = new PointerInfo(type, evt, pickResult);
-                                    this.onPointerObservable.notifyObservers(pi, type);
-                                }
-                            }
-                        }
-                        else {
-                            let type = PointerEventTypes.POINTERUP;
-                            let pi = new PointerInfo(type, evt, pickResult);
-                            this.onPointerObservable.notifyObservers(pi, type);
-                        }
-                    }
+                    this._processPointerUp(pickResult, evt, clickInfo);
 
                     // Sprites
                     if (this.spriteManagers.length > 0) {
-                        pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, spritePredicate, false, this.cameraToUseForPointers);
+                        pickResult = this.pickSprite(this._unTranslatedPointerX, this._unTranslatedPointerY, this._spritePredicate, false, this.cameraToUseForPointers);
 
                         if (pickResult.hit && pickResult.pickedSprite) {
                             if (pickResult.pickedSprite.actionManager) {
@@ -1479,18 +1561,56 @@
                 }).bind(this));
             };
 
-            this._onKeyDown = (evt: Event) => {
+            this._onKeyDown = (evt: KeyboardEvent) => {
+                let type = KeyboardEventTypes.KEYDOWN;
+                if (this.onPreKeyboardObservable.hasObservers()) {
+                    let pi = new KeyboardInfoPre(type, evt);
+                    this.onPreKeyboardObservable.notifyObservers(pi, type);
+                    if (pi.skipOnPointerObservable) {
+                        return;
+                    }
+                }
+
+                if (this.onKeyboardObservable.hasObservers()) {
+                    let pi = new KeyboardInfo(type, evt);
+                    this.onKeyboardObservable.notifyObservers(pi, type);
+                }
+
                 if (this.actionManager) {
                     this.actionManager.processTrigger(ActionManager.OnKeyDownTrigger, ActionEvent.CreateNewFromScene(this, evt));
                 }
             };
 
-            this._onKeyUp = (evt: Event) => {
+            this._onKeyUp = (evt: KeyboardEvent) => {
+                let type = KeyboardEventTypes.KEYUP;
+                if (this.onPreKeyboardObservable.hasObservers()) {
+                    let pi = new KeyboardInfoPre(type, evt);
+                    this.onPreKeyboardObservable.notifyObservers(pi, type);
+                    if (pi.skipOnPointerObservable) {
+                        return;
+                    }
+                }
+
+                if (this.onKeyboardObservable.hasObservers()) {
+                    let pi = new KeyboardInfo(type, evt);
+                    this.onKeyboardObservable.notifyObservers(pi, type);
+                }
+
                 if (this.actionManager) {
                     this.actionManager.processTrigger(ActionManager.OnKeyUpTrigger, ActionEvent.CreateNewFromScene(this, evt));
                 }
             };
 
+            let engine = this.getEngine();
+            this._onCanvasFocusObserver = engine.onCanvasFocusObservable.add(()=>{
+                canvas.addEventListener("keydown", this._onKeyDown, false);
+                canvas.addEventListener("keyup", this._onKeyUp, false);   
+            });
+
+            this._onCanvasBlurObserver = engine.onCanvasBlurObservable.add(()=>{                
+                canvas.removeEventListener("keydown", this._onKeyDown);
+                canvas.removeEventListener("keyup", this._onKeyUp);
+            });
 
             var eventPrefix = Tools.GetPointerPrefix();
             var canvas = this._engine.getRenderingCanvas();
@@ -1510,25 +1630,33 @@
             }
 
             canvas.tabIndex = 1;
-
-            canvas.addEventListener("keydown", this._onKeyDown, false);
-            canvas.addEventListener("keyup", this._onKeyUp, false);
         }
 
         public detachControl() {
+            let engine = this.getEngine();
             var eventPrefix = Tools.GetPointerPrefix();
-            var canvas = this._engine.getRenderingCanvas();
+            var canvas = engine.getRenderingCanvas();
 
             canvas.removeEventListener(eventPrefix + "move", this._onPointerMove);
             canvas.removeEventListener(eventPrefix + "down", this._onPointerDown);
             canvas.removeEventListener(eventPrefix + "up", this._onPointerUp);
 
+            engine.onCanvasBlurObservable.remove(this._onCanvasBlurObserver);
+            engine.onCanvasFocusObservable.remove(this._onCanvasFocusObserver);
+
             // Wheel
             canvas.removeEventListener('mousewheel', this._onPointerMove);
             canvas.removeEventListener('DOMMouseScroll', this._onPointerMove);
 
+            // Keyboard
             canvas.removeEventListener("keydown", this._onKeyDown);
             canvas.removeEventListener("keyup", this._onKeyUp);
+
+            // Observables
+            this.onKeyboardObservable.clear();
+            this.onPreKeyboardObservable.clear();
+            this.onPointerObservable.clear();
+            this.onPrePointerObservable.clear();     
         }
 
         // Ready
@@ -1645,20 +1773,19 @@
         // Animations
         /**
          * Will start the animation sequence of a given target
-         * @param target - the target 
+         * @param target - the target
          * @param {number} from - from which frame should animation start
          * @param {number} to - till which frame should animation run.
          * @param {boolean} [loop] - should the animation loop
          * @param {number} [speedRatio] - the speed in which to run the animation
          * @param {Function} [onAnimationEnd] function to be executed when the animation ended.
          * @param {BABYLON.Animatable} [animatable] an animatable object. If not provided a new one will be created from the given params.
-         * @return {BABYLON.Animatable} the animatable object created for this animation
-         * @see BABYLON.Animatable
-         * @see http://doc.babylonjs.com/page.php?p=22081
+         * Returns {BABYLON.Animatable} the animatable object created for this animation
+         * See BABYLON.Animatable
          */
         public beginAnimation(target: any, from: number, to: number, loop?: boolean, speedRatio: number = 1.0, onAnimationEnd?: () => void, animatable?: Animatable): Animatable {
 
-            if(from > to && speedRatio > 0){
+            if (from > to && speedRatio > 0) {
                 speedRatio *= -1;
             }
 
@@ -1712,7 +1839,7 @@
 
         /**
          * Will stop the animation of the given target
-         * @param target - the target 
+         * @param target - the target
          * @param animationName - the name of the animation to stop (all animations will be stopped is empty)
          * @see beginAnimation
          */
@@ -1746,16 +1873,20 @@
         }
 
         // Matrix
-        public getViewMatrix(): Matrix {
-            return this._viewMatrix;
+        public _switchToAlternateCameraConfiguration(active: boolean): void {
+            this._useAlternateCameraConfiguration = active;
+        }
+
+        public getViewMatrix(): Matrix {            
+            return this._useAlternateCameraConfiguration ? this._alternateViewMatrix : this._viewMatrix;
         }
 
         public getProjectionMatrix(): Matrix {
-            return this._projectionMatrix;
+            return this._useAlternateCameraConfiguration ? this._alternateProjectionMatrix : this._projectionMatrix;
         }
 
         public getTransformMatrix(): Matrix {
-            return this._transformMatrix;
+            return this._useAlternateCameraConfiguration ? this._alternateTransformMatrix : this._transformMatrix;
         }
 
         public setTransformMatrix(view: Matrix, projection: Matrix): void {
@@ -1784,8 +1915,35 @@
             }
         }
 
+        public _setAlternateTransformMatrix(view: Matrix, projection: Matrix): void {
+            if (this._alternateViewUpdateFlag === view.updateFlag && this._alternateProjectionUpdateFlag === projection.updateFlag) {
+                return;
+            }
+
+            this._alternateViewUpdateFlag = view.updateFlag;
+            this._alternateProjectionUpdateFlag = projection.updateFlag;
+            this._alternateViewMatrix = view;
+            this._alternateProjectionMatrix = projection;
+
+            if (!this._alternateTransformMatrix) {
+                this._alternateTransformMatrix = Matrix.Zero();
+            }
+
+            this._alternateViewMatrix.multiplyToRef(this._alternateProjectionMatrix, this._alternateTransformMatrix);
+
+            if (!this._alternateSceneUbo) {
+                this._createAlternateUbo();
+            }
+            
+            if (this._alternateSceneUbo.useUbo) {
+                this._alternateSceneUbo.updateMatrix("viewProjection", this._alternateTransformMatrix);
+                this._alternateSceneUbo.updateMatrix("view", this._alternateViewMatrix);
+                this._alternateSceneUbo.update();
+            }
+        }
+
         public getSceneUniformBuffer(): UniformBuffer {
-            return this._sceneUbo;
+            return this._useAlternateCameraConfiguration ? this._alternateSceneUbo : this._sceneUbo;
         }
 
         // Methods
@@ -1811,7 +1969,7 @@
         public removeMesh(toRemove: AbstractMesh): number {
             var index = this.meshes.indexOf(toRemove);
             if (index !== -1) {
-                // Remove from the scene if mesh found 
+                // Remove from the scene if mesh found
                 this.meshes.splice(index, 1);
             }
             //notify the collision coordinator
@@ -1827,7 +1985,7 @@
         public removeSkeleton(toRemove: Skeleton): number {
             var index = this.skeletons.indexOf(toRemove);
             if (index !== -1) {
-                // Remove from the scene if found 
+                // Remove from the scene if found
                 this.skeletons.splice(index, 1);
             }
 
@@ -1837,7 +1995,7 @@
         public removeMorphTargetManager(toRemove: MorphTargetManager): number {
             var index = this.morphTargetManagers.indexOf(toRemove);
             if (index !== -1) {
-                // Remove from the scene if found 
+                // Remove from the scene if found
                 this.morphTargetManagers.splice(index, 1);
             }
 
@@ -1847,7 +2005,7 @@
         public removeLight(toRemove: Light): number {
             var index = this.lights.indexOf(toRemove);
             if (index !== -1) {
-                // Remove from the scene if mesh found 
+                // Remove from the scene if mesh found
                 this.lights.splice(index, 1);
                 this.sortLightsByPriority();
             }
@@ -1858,7 +2016,7 @@
         public removeCamera(toRemove: Camera): number {
             var index = this.cameras.indexOf(toRemove);
             if (index !== -1) {
-                // Remove from the scene if mesh found 
+                // Remove from the scene if mesh found
                 this.cameras.splice(index, 1);
             }
             // Remove from activeCameras
@@ -1888,7 +2046,7 @@
         }
 
         public sortLightsByPriority(): void {
-            if(this.requireLightSorting) {
+            if (this.requireLightSorting) {
                 this.lights.sort(Light.compareLightsPriority);
             }
         }
@@ -2117,9 +2275,9 @@
         /**
          * get a particle system by id
          * @param id {number} the particle system id
-         * @return {BABYLON.ParticleSystem|null} the corresponding system or null if none found.
+         * @return {BABYLON.IParticleSystem|null} the corresponding system or null if none found.
          */
-        public getParticleSystemByID(id: string): ParticleSystem {
+        public getParticleSystemByID(id: string): IParticleSystem {
             for (var index = 0; index < this.particleSystems.length; index++) {
                 if (this.particleSystems[index].id === id) {
                     return this.particleSystems[index];
@@ -2398,7 +2556,7 @@
         /**
          * Return a the first highlight layer of the scene with a given name.
          * @param name The name of the highlight layer to look for.
-         * @return The highlight layer if found otherwise null. 
+         * @return The highlight layer if found otherwise null.
          */
         public getHighlightLayerByName(name: string): HighlightLayer {
             for (var index = 0; index < this.highlightLayers.length; index++) {
@@ -2497,8 +2655,30 @@
         public _isInIntermediateRendering(): boolean {
             return this._intermediateRendering
         }
+        
+        private _activeMeshesFrozen = false;
+
+        /**
+         * Use this function to stop evaluating active meshes. The current list will be keep alive between frames
+         */
+        public freezeActiveMeshes(): Scene {
+            this._evaluateActiveMeshes();
+            this._activeMeshesFrozen = true;
+            return this;
+        }
+        
+        /**
+         * Use this function to restart evaluating active meshes on every frame
+         */
+        public unfreezeActiveMeshes() {
+            this._activeMeshesFrozen = false;
+            return this;
+        }
 
         private _evaluateActiveMeshes(): void {
+            if (this._activeMeshesFrozen && this._activeMeshes.length) {
+                return;
+            }
             this.activeCamera._activeMeshes.reset();
             this._activeMeshes.reset();
             this._renderingManager.reset();
@@ -2555,7 +2735,11 @@
                 if (mesh.alwaysSelectAsActiveMesh || mesh.isVisible && mesh.visibility > 0 && ((mesh.layerMask & this.activeCamera.layerMask) !== 0) && mesh.isInFrustum(this._frustumPlanes)) {
                     this._activeMeshes.push(mesh);
                     this.activeCamera._activeMeshes.push(mesh);
+                        
                     mesh._activate(this._renderId);
+                    if (meshLOD !== mesh) {
+                        meshLOD._activate(this._renderId);
+                    }
 
                     this._activeMesh(mesh, meshLOD);
                 }
@@ -2569,11 +2753,12 @@
                 for (var particleIndex = 0; particleIndex < this.particleSystems.length; particleIndex++) {
                     var particleSystem = this.particleSystems[particleIndex];
 
-                    if (!particleSystem.isStarted()) {
+                    if (!particleSystem.isStarted() || !particleSystem.emitter) {
                         continue;
                     }
 
-                    if (!particleSystem.emitter.position || (particleSystem.emitter && particleSystem.emitter.isEnabled())) {
+                    let emitter = <any>particleSystem.emitter;
+                    if (!emitter.position || emitter.isEnabled()) {
                         this._activeParticleSystems.push(particleSystem);
                         particleSystem.animate();
                         this._renderingManager.dispatchParticles(particleSystem);
@@ -2626,7 +2811,15 @@
             this.setTransformMatrix(this.activeCamera.getViewMatrix(), this.activeCamera.getProjectionMatrix(force));
         }
 
+        public updateAlternateTransformMatrix(alternateCamera: Camera): void {
+            this._setAlternateTransformMatrix(alternateCamera.getViewMatrix(), alternateCamera.getProjectionMatrix());
+        }
+
         private _renderForCamera(camera: Camera): void {
+            if (camera && camera._skipRendering) {
+                return;
+            }
+
             var engine = this._engine;
             var startTime = Tools.Now;
 
@@ -2636,14 +2829,20 @@
                 throw new Error("Active camera not set");
 
             Tools.StartPerformanceCounter("Rendering camera " + this.activeCamera.name);
-
+           
             // Viewport
             engine.setViewport(this.activeCamera.viewport);
 
             // Camera
             this.resetCachedMaterial();
             this._renderId++;
+            this.activeCamera.update();
             this.updateTransformMatrix();
+
+            if (camera._alternateCamera) {
+                this.updateAlternateTransformMatrix(camera._alternateCamera);
+                this._alternateRendering = true;
+            }
 
             this.onBeforeCameraRenderObservable.notifyObservers(this.activeCamera);
 
@@ -2805,12 +3004,11 @@
 
             // Finalize frame
             this.postProcessManager._finalizeFrame(camera.isIntermediate);
-
-            // Update camera
-            this.activeCamera._updateFromScene();
-
+           
             // Reset some special arrays
             this._renderTargets.reset();
+
+            this._alternateRendering = false;
 
             this.onAfterCameraRenderObservable.notifyObservers(this.activeCamera);
 
@@ -2823,6 +3021,9 @@
                 return;
             }
 
+            // Update camera
+            this.activeCamera.update();
+            
             // rig cameras
             for (var index = 0; index < camera._rigCameras.length; index++) {
                 this._renderForCamera(camera._rigCameras[index]);
@@ -2830,9 +3031,6 @@
 
             this.activeCamera = camera;
             this.setTransformMatrix(this.activeCamera.getViewMatrix(), this.activeCamera.getProjectionMatrix());
-
-            // Update camera
-            this.activeCamera._updateFromScene();
         }
 
         private _checkIntersections(): void {
@@ -2879,6 +3077,7 @@
                 return;
             }
 
+            this._interFrameDuration.endMonitoring();
             this._lastFrameDuration.beginMonitoring();
             this._particlesDuration.fetchNewFrame();
             this._spritesDuration.fetchNewFrame();
@@ -2905,16 +3104,58 @@
                 this.simplificationQueue.executeNext();
             }
 
-            // Animations
-            var deltaTime = Math.max(Scene.MinDeltaTime, Math.min(this._engine.getDeltaTime(), Scene.MaxDeltaTime));
-            this._animationRatio = deltaTime * (60.0 / 1000.0);
-            this._animate();
+            if(this._engine.isDeterministicLockStep()){
+              var deltaTime = Math.max(Scene.MinDeltaTime, Math.min(this._engine.getDeltaTime(), Scene.MaxDeltaTime)) / 1000;
 
-            // Physics
-            if (this._physicsEngine) {
-               Tools.StartPerformanceCounter("Physics");
-               this._physicsEngine._step(deltaTime / 1000.0);
-               Tools.EndPerformanceCounter("Physics");
+              var defaultTimeStep = (60.0 / 1000.0);
+              if (this._physicsEngine) {
+                defaultTimeStep = this._physicsEngine.getTimeStep();
+              }
+
+              var maxSubSteps = this._engine.getLockstepMaxSteps();
+
+              this._timeAccumulator += deltaTime;
+
+              // compute the amount of fixed steps we should have taken since the last step
+              var internalSteps = Math.floor(this._timeAccumulator / defaultTimeStep);
+              internalSteps = Math.min(internalSteps, maxSubSteps);
+
+              for(this._currentInternalStep = 0; this._currentInternalStep < internalSteps; this._currentInternalStep++){
+
+                this.onBeforeStepObservable.notifyObservers(this);
+
+                // Animations
+                this._animationRatio = defaultTimeStep * (60.0 / 1000.0);
+                this._animate();
+
+                // Physics
+                if (this._physicsEngine) {
+                   Tools.StartPerformanceCounter("Physics");
+                   this._physicsEngine._step(defaultTimeStep);
+                   Tools.EndPerformanceCounter("Physics");
+                }
+                this._timeAccumulator -= defaultTimeStep;
+
+                this.onAfterStepObservable.notifyObservers(this);
+                this._currentStepId++;
+
+                if((internalSteps > 1) && (this._currentInternalStep != internalSteps - 1)) {
+                    this._evaluateActiveMeshes();
+                }
+              }
+            }
+            else {
+              // Animations
+              var deltaTime = Math.max(Scene.MinDeltaTime, Math.min(this._engine.getDeltaTime(), Scene.MaxDeltaTime));
+              this._animationRatio = deltaTime * (60.0 / 1000.0);
+              this._animate();
+
+              // Physics
+              if (this._physicsEngine) {
+                 Tools.StartPerformanceCounter("Physics");
+                 this._physicsEngine._step(deltaTime / 1000.0);
+                 Tools.EndPerformanceCounter("Physics");
+              }
             }
 
             // Before render
@@ -2927,6 +3168,7 @@
             var currentActiveCamera = this.activeCamera;
             if (this.renderTargetsEnabled) {
                 Tools.StartPerformanceCounter("Custom render targets", this.customRenderTargets.length > 0);
+                this._intermediateRendering = true;
                 for (var customIndex = 0; customIndex < this.customRenderTargets.length; customIndex++) {
                     var renderTarget = this.customRenderTargets[customIndex];
                     if (renderTarget._shouldRender()) {
@@ -2947,7 +3189,7 @@
                     }
                 }
                 Tools.EndPerformanceCounter("Custom render targets", this.customRenderTargets.length > 0);
-
+                this._intermediateRendering = false;
                 this._renderId++;
             }
 
@@ -3051,6 +3293,7 @@
             }
 
             Tools.EndPerformanceCounter("Scene rendering");
+            this._interFrameDuration.beginMonitoring();           
             this._lastFrameDuration.endMonitoring();
             this._totalMeshesCounter.addCount(this.meshes.length, true);
             this._totalLightsCounter.addCount(this.lights.length, true);
@@ -3084,7 +3327,10 @@
                 var mat = Matrix.Invert(listeningCamera.getViewMatrix());
                 var cameraDirection = Vector3.TransformNormal(new Vector3(0, 0, -1), mat);
                 cameraDirection.normalize();
-                audioEngine.audioContext.listener.setOrientation(cameraDirection.x, cameraDirection.y, cameraDirection.z, 0, 1, 0);
+                // To avoid some errors on GearVR
+                if (!isNaN(cameraDirection.x) && !isNaN(cameraDirection.y) && !isNaN(cameraDirection.z)) {
+                    audioEngine.audioContext.listener.setOrientation(cameraDirection.x, cameraDirection.y, cameraDirection.z, 0, 1, 0);
+                }
                 var i: number;
                 for (i = 0; i < this.mainSoundTrack.soundCollection.length; i++) {
                     var sound = this.mainSoundTrack.soundCollection[i];
@@ -3242,11 +3488,18 @@
 
             this.importedMeshesFiles = new Array<string>();
 
+            this.resetCachedMaterial();
+
             if (this._depthRenderer) {
                 this._depthRenderer.dispose();
             }
 
-            // Smart arrays            
+            if (this._gamepadManager) {
+                this._gamepadManager.dispose();
+                this._gamepadManager = null;
+            }
+
+            // Smart arrays
             if (this.activeCamera) {
                 this.activeCamera._activeMeshes.dispose();
                 this.activeCamera = null;
@@ -3257,6 +3510,8 @@
             this._activeParticleSystems.dispose();
             this._activeSkeletons.dispose();
             this._softwareSkinnedMeshes.dispose();
+            this._renderTargets.dispose();
+
             if (this._boundingBoxRenderer) {
                 this._boundingBoxRenderer.dispose();
             }
@@ -3282,6 +3537,11 @@
                 this.disposeSounds();
             }
 
+            // VR Helper
+            if (this.VRHelper) {
+                this.VRHelper.dispose();
+            }
+
             // Detach cameras
             var canvas = this._engine.getRenderingCanvas();
             var index;
@@ -3305,6 +3565,12 @@
             }
 
             // Release materials
+            if (this.defaultMaterial) {
+                this.defaultMaterial.dispose()
+            }
+            while (this.multiMaterials.length) {
+                this.multiMaterials[0].dispose();
+            }
             while (this.materials.length) {
                 this.materials[0].dispose();
             }
@@ -3317,6 +3583,11 @@
             // Release sprites
             while (this.spriteManagers.length) {
                 this.spriteManagers[0].dispose();
+            }
+
+            // Release postProcesses
+            while (this.postProcesses.length) {
+                this.postProcesses[0].dispose();
             }
 
             // Release layers
@@ -3335,8 +3606,16 @@
             // Release UBO
             this._sceneUbo.dispose();
 
+            if (this._alternateSceneUbo) {
+                this._alternateSceneUbo.dispose();
+            }
+
             // Post-processes
             this.postProcessManager.dispose();
+
+            if (this._postProcessRenderPipelineManager) {
+                this._postProcessRenderPipelineManager.dispose();
+            }
 
             // Physics
             if (this._physicsEngine) {
@@ -3352,6 +3631,10 @@
 
             this._engine.wipeCaches();
             this._engine = null;
+
+            this.defaultMaterial = null;
+            this.multiMaterials = null;
+            this.materials = null;
         }
 
         public get isDisposed(): boolean {
@@ -3373,6 +3656,10 @@
             var max = new Vector3(-Number.MAX_VALUE, -Number.MAX_VALUE, -Number.MAX_VALUE);
             for (var index = 0; index < this.meshes.length; index++) {
                 var mesh = this.meshes[index];
+
+                if (!mesh.subMeshes || mesh.subMeshes.length === 0) {
+                    continue;
+                }
 
                 mesh.computeWorldMatrix(true);
                 var minBox = mesh.getBoundingInfo().boundingBox.minimumWorld;
@@ -3487,7 +3774,7 @@
         private _internalMultiPick(rayFunction: (world: Matrix) => Ray, predicate: (mesh: AbstractMesh) => boolean): PickingInfo[] {
             if (!BABYLON.PickingInfo) {
                 return null;
-            }            
+            }
             var pickingInfos = new Array<PickingInfo>();
 
             for (var meshIndex = 0; meshIndex < this.meshes.length; meshIndex++) {
@@ -3550,26 +3837,33 @@
             return pickingInfo || new PickingInfo();
         }
 
-        /// <summary>Launch a ray to try to pick a mesh in the scene</summary>
-        /// <param name="x">X position on screen</param>
-        /// <param name="y">Y position on screen</param>
-        /// <param name="predicate">Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true</param>
-        /// <param name="fastCheck">Launch a fast check only using the bounding boxes. Can be set to null.</param>
-        /// <param name="camera">camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used</param>
+        /** Launch a ray to try to pick a mesh in the scene
+         * @param x position on screen
+         * @param y position on screen
+         * @param predicate Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true
+         * @param fastCheck Launch a fast check only using the bounding boxes. Can be set to null.
+         * @param camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used
+         */
         public pick(x: number, y: number, predicate?: (mesh: AbstractMesh) => boolean, fastCheck?: boolean, camera?: Camera): PickingInfo {
             return this._internalPick(world => this.createPickingRay(x, y, world, camera), predicate, fastCheck);
         }
 
-        /// <summary>Launch a ray to try to pick a mesh in the scene</summary>
-        /// <param name="x">X position on screen</param>
-        /// <param name="y">Y position on screen</param>
-        /// <param name="predicate">Predicate function used to determine eligible sprites. Can be set to null. In this case, a sprite must have isPickable set to true</param>
-        /// <param name="fastCheck">Launch a fast check only using the bounding boxes. Can be set to null.</param>
-        /// <param name="camera">camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used</param>
+        /** Launch a ray to try to pick a sprite in the scene
+         * @param x position on screen
+         * @param y position on screen
+         * @param predicate Predicate function used to determine eligible sprites. Can be set to null. In this case, a sprite must have isPickable set to true
+         * @param fastCheck Launch a fast check only using the bounding boxes. Can be set to null.
+         * @param camera camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used
+         */
         public pickSprite(x: number, y: number, predicate?: (sprite: Sprite) => boolean, fastCheck?: boolean, camera?: Camera): PickingInfo {
             return this._internalPickSprites(this.createPickingRayInCameraSpace(x, y, camera), predicate, fastCheck, camera);
         }
 
+        /** Use the given ray to pick a mesh in the scene
+         * @param ray The ray to use to pick meshes
+         * @param predicate Predicate function used to determine eligible sprites. Can be set to null. In this case, a sprite must have isPickable set to true
+         * @param fastCheck Launch a fast check only using the bounding boxes. Can be set to null.
+         */
         public pickWithRay(ray: Ray, predicate: (mesh: Mesh) => boolean, fastCheck?: boolean): PickingInfo {
             return this._internalPick(world => {
                 if (!this._pickWithRayInverseMatrix) {
@@ -3580,18 +3874,22 @@
             }, predicate, fastCheck);
         }
 
-        /// <summary>Launch a ray to try to pick a mesh in the scene</summary>
-        /// <param name="x">X position on screen</param>
-        /// <param name="y">Y position on screen</param>
-        /// <param name="predicate">Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true</param>
-        /// <param name="camera">camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used</param>
+        /**
+         * Launch a ray to try to pick a mesh in the scene
+         * @param x X position on screen
+         * @param y Y position on screen
+         * @param predicate Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true
+         * @param camera camera to use for computing the picking ray. Can be set to null. In this case, the scene.activeCamera will be used
+         */
         public multiPick(x: number, y: number, predicate?: (mesh: AbstractMesh) => boolean, camera?: Camera): PickingInfo[] {
             return this._internalMultiPick(world => this.createPickingRay(x, y, world, camera), predicate);
         }
 
-        /// <summary>Launch a ray to try to pick a mesh in the scene</summary>
-        /// <param name="ray">Ray to use</param>
-        /// <param name="predicate">Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true</param>
+        /**
+         * Launch a ray to try to pick a mesh in the scene
+         * @param ray Ray to use
+         * @param predicate Predicate function used to determine eligible meshes. Can be set to null. In this case, a mesh must be enabled, visible and with isPickable set to true
+         */
         public multiPickWithRay(ray: Ray, predicate: (mesh: Mesh) => boolean): PickingInfo[] {
             return this._internalMultiPick(world => {
                 if (!this._pickWithRayInverseMatrix) {
@@ -3686,6 +3984,48 @@
         }
 
         // Misc.
+        public _rebuildGeometries(): void {
+            for (var geometry of this._geometries) {
+                geometry._rebuild();
+            }
+
+            for (var mesh of this.meshes) {
+                mesh._rebuild();
+            }
+
+            if (this.postProcessManager) {
+                this.postProcessManager._rebuild();
+            }         
+
+            for (var layer of this.layers) {
+                layer._rebuild();
+            }
+
+            for (var highlightLayer of this.highlightLayers) {
+                highlightLayer._rebuild();
+            }
+
+            if (this._boundingBoxRenderer) {
+                this._boundingBoxRenderer._rebuild();
+            }
+
+            for (var system of this.particleSystems) {
+                system.rebuild();
+            }
+
+            if (this._postProcessRenderPipelineManager) {
+                this._postProcessRenderPipelineManager._rebuild();
+            }            
+        }
+
+        public _rebuildTextures(): void {
+            for (var texture of this.textures) {
+                texture._rebuild();
+            }
+
+            this.markAllMaterialsAsDirty(Material.TextureDirtyFlag);
+        }
+
         public createDefaultCameraOrLight(createArcRotateCamera = false, replace = false, attachCameraControls = false) {
             // Dispose existing camera or light in replace mode.
             if (replace) {
@@ -3715,13 +4055,13 @@
                 var camera: TargetCamera;
                 var radius = worldSize.length() * 1.5;
                 if (createArcRotateCamera) {
-                    var arcRotateCamera = new ArcRotateCamera("default camera", 4.712, 1.571, radius, worldCenter, this);
+                    var arcRotateCamera = new ArcRotateCamera("default camera", -(Math.PI / 2), Math.PI / 2, radius, worldCenter, this);
                     arcRotateCamera.lowerRadiusLimit = radius * 0.01;
                     arcRotateCamera.wheelPrecision = 100 / radius;
                     camera = arcRotateCamera;
                 }
                 else {
-                    var freeCamera = new FreeCamera("default camera", new Vector3(worldCenter.x, worldCenter.y, this.useRightHandedSystem ? -radius : radius), this);
+                    var freeCamera = new FreeCamera("default camera", new Vector3(worldCenter.x, worldCenter.y, -radius), this);
                     freeCamera.setTarget(worldCenter);
                     camera = freeCamera;
                 }
@@ -3772,6 +4112,10 @@
             return hdrSkybox;
         }
 
+        public createDefaultVRExperience() {
+            this.VRHelper = new BABYLON.VRExperienceHelper(this, null);
+        }
+
         // Tags
         private _getByTags(list: any[], tagsQuery: string, forEach?: (item: any) => void): any[] {
             if (tagsQuery === undefined) {
@@ -3813,7 +4157,7 @@
         /**
          * Overrides the default sort function applied in the renderging group to prepare the meshes.
          * This allowed control for front to back rendering or reversly depending of the special needs.
-         * 
+         *
          * @param renderingGroupId The rendering group id corresponding to its index
          * @param opaqueSortCompareFn The opaque queue comparison function use to sort.
          * @param alphaTestSortCompareFn The alpha test queue comparison function use to sort.
@@ -3832,7 +4176,7 @@
 
         /**
          * Specifies whether or not the stencil and depth buffer are cleared between two rendering groups.
-         * 
+         *
          * @param renderingGroupId The rendering group id corresponding to its index
          * @param autoClearDepthStencil Automatically clears depth and stencil between groups if true.
          * @param depth Automatically clears depth between groups if true and autoClear is true.

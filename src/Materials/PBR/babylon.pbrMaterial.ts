@@ -227,6 +227,20 @@
         @serialize()
         @expandToProperty("_markAllSubMeshesAsTexturesDirty")
         public useAlphaFromAlbedoTexture = false;
+
+        /**
+         * Enforces alpha test in opaque or blend mode in order to improve the performances of some situations.
+         */
+        @serialize()
+        @expandToProperty("_markAllSubMeshesAsTexturesDirty")
+        public forceAlphaTest = false;
+
+        /**
+         * Defines the alpha limits in alpha test mode.
+         */
+        @serialize()
+        @expandToProperty("_markAllSubMeshesAsTexturesDirty")
+        public alphaCutOff = 0.4;
         
         /**
          * Specifies that the material will keeps the specular highlights over a transparent surface (only the most limunous ones).
@@ -332,6 +346,13 @@
         public disableLighting = false;
 
         /**
+         * Force the shader to compute irradiance in the fragment shader in order to take bump in account.
+         */
+        @serialize()
+        @expandToProperty("_markAllSubMeshesAsTexturesDirty")
+        public forceIrradianceInFragment = false;        
+
+        /**
          * Number of Simultaneous lights allowed on the material.
          */
         @serialize()
@@ -365,7 +386,7 @@
          */
         @serialize()
         @expandToProperty("_markAllSubMeshesAsTexturesDirty")
-        public premultiplyAlpha = false;
+        public preMultiplyAlpha = false;
 
         /**
          * A fresnel is applied to the alpha of the model to ensure grazing angles edges are not alpha tested.
@@ -382,6 +403,14 @@
         @serializeAsTexture()
         @expandToProperty("_markAllSubMeshesAsTexturesDirty")
         public environmentBRDFTexture: BaseTexture = null;
+
+        /**
+         * Force normal to face away from face.
+         * (Temporary internal fix to remove before 3.1)
+         */
+        @serialize()
+        @expandToProperty("_markAllSubMeshesAsTexturesDirty")
+        public forceNormalForward = false;
 
         /**
          * Gets the image processing configuration used either in this material.
@@ -543,8 +572,8 @@
                 activeTextures.push(this._emissiveTexture);
             }
 
-            if (this._reflectionTexture) {
-                activeTextures.push(this._reflectionTexture);
+            if (this._reflectivityTexture) {
+                activeTextures.push(this._reflectivityTexture);
             }
 
             if (this._metallicTexture) {
@@ -590,6 +619,10 @@
             if (this._reflectionTexture === texture) {
                 return true;
             }     
+
+            if (this._reflectivityTexture === texture) {
+                return true;
+            }                
 
             if (this._metallicTexture === texture) {
                 return true;
